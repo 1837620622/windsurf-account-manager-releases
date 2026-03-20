@@ -519,6 +519,21 @@ pub async fn get_plan_status(
                 updated_account.subscription_expires_at = chrono::DateTime::from_timestamp(plan_end, 0);
             }
             
+            // ====== 弹性计费（Usage Allowance）字段 ======
+            // proto 返回的是剩余百分比（remaining），转换为已用百分比（usage = 100 - remaining）
+            if let Some(v) = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64()) {
+                updated_account.daily_quota_remaining_percent = Some((100 - v).clamp(0, 100) as i32);
+            }
+            if let Some(v) = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64()) {
+                updated_account.weekly_quota_remaining_percent = Some((100 - v).clamp(0, 100) as i32);
+            }
+            if let Some(v) = plan_status.get("daily_quota_reset_timestamp").and_then(|v| v.as_i64()) {
+                updated_account.daily_quota_reset_timestamp = Some(v);
+            }
+            if let Some(v) = plan_status.get("weekly_quota_reset_timestamp").and_then(|v| v.as_i64()) {
+                updated_account.weekly_quota_reset_timestamp = Some(v);
+            }
+            
             updated_account.last_quota_update = Some(chrono::Utc::now());
             
             // 获取团队成员信息，判断是否为团队所有者（Admin）
