@@ -88,7 +88,7 @@
           </div>
         </div>
         <!-- 每日配额已用 -->
-        <div class="elastic-quota-row" v-if="account.dailyQuotaRemainingPercent !== undefined">
+        <div class="elastic-quota-row" v-if="account.dailyQuotaRemainingPercent != null">
           <div class="elastic-quota-label">
             <span>Daily Usage</span>
             <span class="elastic-quota-value">{{ account.dailyQuotaRemainingPercent }}%</span>
@@ -105,7 +105,7 @@
           </div>
         </div>
         <!-- 每周配额已用 -->
-        <div class="elastic-quota-row" v-if="account.weeklyQuotaRemainingPercent !== undefined">
+        <div class="elastic-quota-row" v-if="account.weeklyQuotaRemainingPercent != null">
           <div class="elastic-quota-label">
             <span>Weekly Usage</span>
             <span class="elastic-quota-value">{{ account.weeklyQuotaRemainingPercent }}%</span>
@@ -649,8 +649,8 @@ const quotaColor = computed(() => {
 // ====== 弹性计费（Usage Allowance）相关 ======
 // 是否有弹性计费数据（有弹性计费数据时优先显示，替代旧积分区块）
 const hasElasticQuota = computed(() => {
-  return props.account.dailyQuotaRemainingPercent !== undefined || 
-         props.account.weeklyQuotaRemainingPercent !== undefined;
+  return props.account.dailyQuotaRemainingPercent != null || 
+         props.account.weeklyQuotaRemainingPercent != null;
 });
 
 // 弹性计费已用百分比颜色（已用越少=绿，中=橙，已用越多=红）

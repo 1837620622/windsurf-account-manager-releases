@@ -324,13 +324,13 @@
                       </div>
                     </div>
                     <!-- 弹性计费（Usage Allowance）配额 -->
-                    <div class="elastic-billing-section" v-if="currentAccount?.dailyQuotaRemainingPercent !== undefined || currentAccount?.weeklyQuotaRemainingPercent !== undefined">
+                    <div class="elastic-billing-section" v-if="currentAccount?.dailyQuotaRemainingPercent != null || currentAccount?.weeklyQuotaRemainingPercent != null">
                       <div class="elastic-billing-title">
                         <el-icon><DataLine /></el-icon>
                         <span>弹性计费配额</span>
                       </div>
                       <div class="elastic-billing-items">
-                        <div class="elastic-item" v-if="currentAccount?.dailyQuotaRemainingPercent !== undefined">
+                        <div class="elastic-item" v-if="currentAccount?.dailyQuotaRemainingPercent != null">
                           <div class="elastic-item-header">
                             <span class="elastic-label">Daily Usage</span>
                             <span class="elastic-percent" :style="{ color: getElasticColor(currentAccount?.dailyQuotaRemainingPercent) }">
@@ -348,7 +348,7 @@
                             <span>{{ formatResetTime(currentAccount?.dailyQuotaResetTimestamp) }}</span>
                           </div>
                         </div>
-                        <div class="elastic-item" v-if="currentAccount?.weeklyQuotaRemainingPercent !== undefined">
+                        <div class="elastic-item" v-if="currentAccount?.weeklyQuotaRemainingPercent != null">
                           <div class="elastic-item-header">
                             <span class="elastic-label">Weekly Usage</span>
                             <span class="elastic-percent" :style="{ color: getElasticColor(currentAccount?.weeklyQuotaRemainingPercent) }">

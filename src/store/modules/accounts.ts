@@ -465,16 +465,16 @@ export const useAccountsStore = defineStore('accounts', () => {
           updatedAccount.is_team_owner = result.is_team_owner;
         }
         // ====== 弹性计费（Usage Allowance）字段 ======
-        if (result.daily_quota_remaining_percent !== undefined) {
+        if (result.daily_quota_remaining_percent != null) {
           updatedAccount.dailyQuotaRemainingPercent = result.daily_quota_remaining_percent;
         }
-        if (result.weekly_quota_remaining_percent !== undefined) {
+        if (result.weekly_quota_remaining_percent != null) {
           updatedAccount.weeklyQuotaRemainingPercent = result.weekly_quota_remaining_percent;
         }
-        if (result.daily_quota_reset_timestamp !== undefined) {
+        if (result.daily_quota_reset_timestamp != null) {
           updatedAccount.dailyQuotaResetTimestamp = result.daily_quota_reset_timestamp;
         }
-        if (result.weekly_quota_reset_timestamp !== undefined) {
+        if (result.weekly_quota_reset_timestamp != null) {
           updatedAccount.weeklyQuotaResetTimestamp = result.weekly_quota_reset_timestamp;
         }
         updatedAccount.last_quota_update = dayjs().toISOString();
@@ -570,10 +570,10 @@ export const useAccountsStore = defineStore('accounts', () => {
             if (item.data.subscription_expires_at) updatedAcc.subscription_expires_at = dayjs.unix(item.data.subscription_expires_at).toISOString();
             if (item.data.last_quota_update) updatedAcc.last_quota_update = item.data.last_quota_update;
             // ====== 弹性计费（Usage Allowance）字段 ======
-            if (item.data.daily_quota_remaining_percent !== undefined) updatedAcc.dailyQuotaRemainingPercent = item.data.daily_quota_remaining_percent;
-            if (item.data.weekly_quota_remaining_percent !== undefined) updatedAcc.weeklyQuotaRemainingPercent = item.data.weekly_quota_remaining_percent;
-            if (item.data.daily_quota_reset_timestamp !== undefined) updatedAcc.dailyQuotaResetTimestamp = item.data.daily_quota_reset_timestamp;
-            if (item.data.weekly_quota_reset_timestamp !== undefined) updatedAcc.weeklyQuotaResetTimestamp = item.data.weekly_quota_reset_timestamp;
+            if (item.data.daily_quota_remaining_percent != null) updatedAcc.dailyQuotaRemainingPercent = item.data.daily_quota_remaining_percent;
+            if (item.data.weekly_quota_remaining_percent != null) updatedAcc.weeklyQuotaRemainingPercent = item.data.weekly_quota_remaining_percent;
+            if (item.data.daily_quota_reset_timestamp != null) updatedAcc.dailyQuotaResetTimestamp = item.data.daily_quota_reset_timestamp;
+            if (item.data.weekly_quota_reset_timestamp != null) updatedAcc.weeklyQuotaResetTimestamp = item.data.weekly_quota_reset_timestamp;
             updatedAcc.status = 'active';
             accounts.value.splice(idx, 1, updatedAcc);
             
