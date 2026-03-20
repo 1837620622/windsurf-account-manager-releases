@@ -935,6 +935,22 @@ async function handleRefreshToken() {
           }
         }
         
+        // ====== 补调 getPlanStatus 获取弹性计费数据 ======
+        try {
+          const planResult = await apiService.getPlanStatus(props.account.id);
+          if (planResult.success && planResult.plan_status) {
+            const ps = planResult.plan_status;
+            updatedAccount.dailyQuotaRemainingPercent = ps.daily_quota_remaining_percent ?? undefined;
+            updatedAccount.weeklyQuotaRemainingPercent = ps.weekly_quota_remaining_percent ?? undefined;
+            updatedAccount.dailyQuotaResetTimestamp = ps.daily_quota_reset_timestamp ?? undefined;
+            updatedAccount.weeklyQuotaResetTimestamp = ps.weekly_quota_reset_timestamp ?? undefined;
+            // 同步套餐名和配额
+            if (ps.plan_name) updatedAccount.plan_name = ps.plan_name;
+          }
+        } catch (e) {
+          console.warn('[AccountCard] getPlanStatus failed:', e);
+        }
+
         updatedAccount.last_quota_update = dayjs().toISOString();
         // 保存到后端数据库
         await accountsStore.updateAccount(updatedAccount);
