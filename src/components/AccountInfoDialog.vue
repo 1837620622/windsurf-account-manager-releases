@@ -332,7 +332,7 @@
                       <div class="elastic-billing-items">
                         <div class="elastic-item" v-if="currentAccount?.dailyQuotaRemainingPercent != null">
                           <div class="elastic-item-header">
-                            <span class="elastic-label">Daily Usage</span>
+                            <span class="elastic-label">Daily Remaining</span>
                             <span class="elastic-percent" :style="{ color: getElasticColor(currentAccount?.dailyQuotaRemainingPercent) }">
                               {{ currentAccount?.dailyQuotaRemainingPercent }}%
                             </span>
@@ -350,7 +350,7 @@
                         </div>
                         <div class="elastic-item" v-if="currentAccount?.weeklyQuotaRemainingPercent != null">
                           <div class="elastic-item-header">
-                            <span class="elastic-label">Weekly Usage</span>
+                            <span class="elastic-label">Weekly Remaining</span>
                             <span class="elastic-percent" :style="{ color: getElasticColor(currentAccount?.weeklyQuotaRemainingPercent) }">
                               {{ currentAccount?.weeklyQuotaRemainingPercent }}%
                             </span>
@@ -782,10 +782,10 @@ const currentAccount = computed(() => {
   return accountsStore.accounts.find(a => a.id === uiStore.currentViewingAccountId) || null;
 });
 
-// 弹性计费已用百分比颜色（已用越少=绿，中=橙，已用越多=红）
+// 弹性计费剩余百分比颜色（剩余多=绿，中=橙，剩余少=红），与官网一致
 function getElasticColor(percent: number): string {
-  if (percent < 50) return '#10b981';
-  if (percent < 80) return '#f59e0b';
+  if (percent > 50) return '#10b981';
+  if (percent > 20) return '#f59e0b';
   return '#ef4444';
 }
 

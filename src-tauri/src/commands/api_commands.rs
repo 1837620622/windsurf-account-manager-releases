@@ -163,12 +163,12 @@ pub async fn login_account(
                     }
                     
                     // ====== 弹性计费（Usage Allowance）字段 ======
-                    // proto 返回的是剩余百分比（remaining），转换为已用百分比（usage = 100 - remaining）
+                    // proto field_14/15 直接返回剩余百分比（remaining%），与官网一致，无需转换
                     if let Some(v) = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                        updated_account.daily_quota_remaining_percent = Some((100 - v).clamp(0, 100) as i32);
+                        updated_account.daily_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
                     }
                     if let Some(v) = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                        updated_account.weekly_quota_remaining_percent = Some((100 - v).clamp(0, 100) as i32);
+                        updated_account.weekly_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
                     }
                     if let Some(v) = plan_status.get("daily_quota_reset_timestamp").and_then(|v| v.as_i64()) {
                         updated_account.daily_quota_reset_timestamp = Some(v);
@@ -352,12 +352,12 @@ pub async fn refresh_token(
                     }
                     
                     // ====== 弹性计费（Usage Allowance）字段 ======
-                    // proto 返回的是剩余百分比（remaining），转换为已用百分比（usage = 100 - remaining）
+                    // proto field_14/15 直接返回剩余百分比（remaining%），与官网一致，无需转换
                     if let Some(v) = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                        updated_account.daily_quota_remaining_percent = Some((100 - v).clamp(0, 100) as i32);
+                        updated_account.daily_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
                     }
                     if let Some(v) = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                        updated_account.weekly_quota_remaining_percent = Some((100 - v).clamp(0, 100) as i32);
+                        updated_account.weekly_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
                     }
                     if let Some(v) = plan_status.get("daily_quota_reset_timestamp").and_then(|v| v.as_i64()) {
                         updated_account.daily_quota_reset_timestamp = Some(v);
@@ -520,12 +520,12 @@ pub async fn get_plan_status(
             }
             
             // ====== 弹性计费（Usage Allowance）字段 ======
-            // proto 返回的是剩余百分比（remaining），转换为已用百分比（usage = 100 - remaining）
+            // proto field_14/15 直接返回剩余百分比（remaining%），与官网一致，无需转换
             if let Some(v) = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                updated_account.daily_quota_remaining_percent = Some((100 - v).clamp(0, 100) as i32);
+                updated_account.daily_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
             }
             if let Some(v) = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                updated_account.weekly_quota_remaining_percent = Some((100 - v).clamp(0, 100) as i32);
+                updated_account.weekly_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
             }
             if let Some(v) = plan_status.get("daily_quota_reset_timestamp").and_then(|v| v.as_i64()) {
                 updated_account.daily_quota_reset_timestamp = Some(v);
@@ -1509,12 +1509,12 @@ async fn refresh_token_internal(
                     }
                     
                     // ====== 弹性计费（Usage Allowance）字段 ======
-                    // proto 返回的是剩余百分比（remaining），转换为已用百分比（usage = 100 - remaining）
+                    // proto field_14/15 直接返回剩余百分比（remaining%），与官网一致，无需转换
                     if let Some(v) = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                        updated_account.daily_quota_remaining_percent = Some((100 - v).clamp(0, 100) as i32);
+                        updated_account.daily_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
                     }
                     if let Some(v) = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                        updated_account.weekly_quota_remaining_percent = Some((100 - v).clamp(0, 100) as i32);
+                        updated_account.weekly_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
                     }
                     if let Some(v) = plan_status.get("daily_quota_reset_timestamp").and_then(|v| v.as_i64()) {
                         updated_account.daily_quota_reset_timestamp = Some(v);

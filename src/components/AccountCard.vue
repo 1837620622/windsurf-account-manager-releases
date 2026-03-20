@@ -87,16 +87,16 @@
             </el-tag>
           </div>
         </div>
-        <!-- 每日配额已用 -->
+        <!-- 每日配额剩余 -->
         <div class="elastic-quota-row" v-if="account.dailyQuotaRemainingPercent != null">
           <div class="elastic-quota-label">
-            <span>Daily Usage</span>
+            <span>Daily Remaining</span>
             <span class="elastic-quota-value">{{ account.dailyQuotaRemainingPercent }}%</span>
           </div>
           <el-progress
             :percentage="account.dailyQuotaRemainingPercent"
             :stroke-width="6"
-            :color="getUsageColor(account.dailyQuotaRemainingPercent)"
+            :color="getRemainingColor(account.dailyQuotaRemainingPercent)"
             :show-text="false"
           />
           <div class="elastic-quota-reset" v-if="dailyResetText">
@@ -104,16 +104,16 @@
             <span>{{ dailyResetText }}</span>
           </div>
         </div>
-        <!-- 每周配额已用 -->
+        <!-- 每周配额剩余 -->
         <div class="elastic-quota-row" v-if="account.weeklyQuotaRemainingPercent != null">
           <div class="elastic-quota-label">
-            <span>Weekly Usage</span>
+            <span>Weekly Remaining</span>
             <span class="elastic-quota-value">{{ account.weeklyQuotaRemainingPercent }}%</span>
           </div>
           <el-progress
             :percentage="account.weeklyQuotaRemainingPercent"
             :stroke-width="6"
-            :color="getUsageColor(account.weeklyQuotaRemainingPercent)"
+            :color="getRemainingColor(account.weeklyQuotaRemainingPercent)"
             :show-text="false"
           />
           <div class="elastic-quota-reset" v-if="weeklyResetText">
@@ -653,10 +653,10 @@ const hasElasticQuota = computed(() => {
          props.account.weeklyQuotaRemainingPercent != null;
 });
 
-// 弹性计费已用百分比颜色（已用越少=绿，中=橙，已用越多=红）
-function getUsageColor(percent: number): string {
-  if (percent < 50) return '#10b981';
-  if (percent < 80) return '#f59e0b';
+// 弹性计费剩余百分比颜色（剩余多=绿，中=橙，剩余少=红），与官网一致
+function getRemainingColor(percent: number): string {
+  if (percent > 50) return '#10b981';
+  if (percent > 20) return '#f59e0b';
   return '#ef4444';
 }
 
