@@ -465,18 +465,11 @@ export const useAccountsStore = defineStore('accounts', () => {
           updatedAccount.is_team_owner = result.is_team_owner;
         }
         // ====== 弹性计费（Usage Allowance）字段 ======
-        if (result.daily_quota_remaining_percent != null) {
-          updatedAccount.dailyQuotaRemainingPercent = result.daily_quota_remaining_percent;
-        }
-        if (result.weekly_quota_remaining_percent != null) {
-          updatedAccount.weeklyQuotaRemainingPercent = result.weekly_quota_remaining_percent;
-        }
-        if (result.daily_quota_reset_timestamp != null) {
-          updatedAccount.dailyQuotaResetTimestamp = result.daily_quota_reset_timestamp;
-        }
-        if (result.weekly_quota_reset_timestamp != null) {
-          updatedAccount.weeklyQuotaResetTimestamp = result.weekly_quota_reset_timestamp;
-        }
+        // 始终更新，包括 null（清零非弹性计费用户的旧值）
+        updatedAccount.dailyQuotaRemainingPercent = result.daily_quota_remaining_percent ?? undefined;
+        updatedAccount.weeklyQuotaRemainingPercent = result.weekly_quota_remaining_percent ?? undefined;
+        updatedAccount.dailyQuotaResetTimestamp = result.daily_quota_reset_timestamp ?? undefined;
+        updatedAccount.weeklyQuotaResetTimestamp = result.weekly_quota_reset_timestamp ?? undefined;
         updatedAccount.last_quota_update = dayjs().toISOString();
         
         // 根据模式选择更新方式
@@ -567,13 +560,14 @@ export const useAccountsStore = defineStore('accounts', () => {
             if (item.data.is_disabled !== undefined) updatedAcc.is_disabled = item.data.is_disabled;
             if (item.data.is_team_owner !== undefined) updatedAcc.is_team_owner = item.data.is_team_owner;
             if (item.data.subscription_active !== undefined) updatedAcc.subscription_active = item.data.subscription_active;
-            if (item.data.subscription_expires_at) updatedAcc.subscription_expires_at = dayjs.unix(item.data.subscription_expires_at).toISOString();
+            if (item.data.subscription_expires_at) updatedAcc.subscription_expires_at = item.data.subscription_expires_at;
             if (item.data.last_quota_update) updatedAcc.last_quota_update = item.data.last_quota_update;
             // ====== 弹性计费（Usage Allowance）字段 ======
-            if (item.data.daily_quota_remaining_percent != null) updatedAcc.dailyQuotaRemainingPercent = item.data.daily_quota_remaining_percent;
-            if (item.data.weekly_quota_remaining_percent != null) updatedAcc.weeklyQuotaRemainingPercent = item.data.weekly_quota_remaining_percent;
-            if (item.data.daily_quota_reset_timestamp != null) updatedAcc.dailyQuotaResetTimestamp = item.data.daily_quota_reset_timestamp;
-            if (item.data.weekly_quota_reset_timestamp != null) updatedAcc.weeklyQuotaResetTimestamp = item.data.weekly_quota_reset_timestamp;
+            // 始终更新，包括 null（清零非弹性计费用户的旧值）
+            updatedAcc.dailyQuotaRemainingPercent = item.data.daily_quota_remaining_percent ?? undefined;
+            updatedAcc.weeklyQuotaRemainingPercent = item.data.weekly_quota_remaining_percent ?? undefined;
+            updatedAcc.dailyQuotaResetTimestamp = item.data.daily_quota_reset_timestamp ?? undefined;
+            updatedAcc.weeklyQuotaResetTimestamp = item.data.weekly_quota_reset_timestamp ?? undefined;
             updatedAcc.status = 'active';
             accounts.value.splice(idx, 1, updatedAcc);
             

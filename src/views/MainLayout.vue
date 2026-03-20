@@ -892,10 +892,15 @@ async function refreshAccounts() {
             if (item.data.windsurf_api_key) account.windsurf_api_key = item.data.windsurf_api_key;
             if (item.data.is_disabled !== undefined) account.is_disabled = item.data.is_disabled;
             if (item.data.subscription_active !== undefined) account.subscription_active = item.data.subscription_active;
-            if (item.data.subscription_expires_at && typeof item.data.subscription_expires_at === 'number' && item.data.subscription_expires_at > 0) {
-              account.subscription_expires_at = dayjs.unix(item.data.subscription_expires_at).toISOString();
+            if (item.data.subscription_expires_at) {
+              account.subscription_expires_at = item.data.subscription_expires_at;
             }
             if (item.data.last_quota_update) account.last_quota_update = item.data.last_quota_update;
+            // ====== 弹性计费（Usage Allowance）字段 ======
+            account.dailyQuotaRemainingPercent = item.data.daily_quota_remaining_percent ?? undefined;
+            account.weeklyQuotaRemainingPercent = item.data.weekly_quota_remaining_percent ?? undefined;
+            account.dailyQuotaResetTimestamp = item.data.daily_quota_reset_timestamp ?? undefined;
+            account.weeklyQuotaResetTimestamp = item.data.weekly_quota_reset_timestamp ?? undefined;
             account.status = 'active';
           } else {
             accountsStore.accounts[idx].status = 'error';

@@ -164,11 +164,17 @@ pub async fn login_account(
                     
                     // ====== 弹性计费（Usage Allowance）字段 ======
                     // proto field_14/15 直接返回剩余百分比（remaining%），与官网一致，无需转换
-                    if let Some(v) = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                        updated_account.daily_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
-                    }
-                    if let Some(v) = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                        updated_account.weekly_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
+                    // 注意：proto 不返回 field_14 时表示 daily 用完了（0% remaining）
+                    let daily_remaining = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64());
+                    let weekly_remaining = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64());
+                    // 有任一弹性计费字段或重置时间戳，说明是弹性计费用户
+                    let has_elastic = daily_remaining.is_some() || weekly_remaining.is_some()
+                        || plan_status.get("daily_quota_reset_timestamp").is_some()
+                        || plan_status.get("weekly_quota_reset_timestamp").is_some();
+                    if has_elastic {
+                        // daily 不存在时默认 0（proto 默认值 = 用完了）
+                        updated_account.daily_quota_remaining_percent = Some(daily_remaining.unwrap_or(0).clamp(0, 100) as i32);
+                        updated_account.weekly_quota_remaining_percent = Some(weekly_remaining.unwrap_or(0).clamp(0, 100) as i32);
                     }
                     if let Some(v) = plan_status.get("daily_quota_reset_timestamp").and_then(|v| v.as_i64()) {
                         updated_account.daily_quota_reset_timestamp = Some(v);
@@ -234,6 +240,30 @@ pub async fn login_account(
                     .map_err(|e| format!("保存账户信息失败: {}", e))?;
             }
         }
+        // 非轻量级 API（GetCurrentUser）不含弹性计费字段，补调 GetPlanStatus
+        if let Ok(plan_result) = windsurf_service.get_plan_status(&token).await {
+            if plan_result.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+                if let Some(plan_status) = plan_result.get("plan_status") {
+                    let daily_remaining = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64());
+                    let weekly_remaining = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64());
+                    let has_elastic = daily_remaining.is_some() || weekly_remaining.is_some()
+                        || plan_status.get("daily_quota_reset_timestamp").is_some()
+                        || plan_status.get("weekly_quota_reset_timestamp").is_some();
+                    if has_elastic {
+                        updated_account.daily_quota_remaining_percent = Some(daily_remaining.unwrap_or(0).clamp(0, 100) as i32);
+                        updated_account.weekly_quota_remaining_percent = Some(weekly_remaining.unwrap_or(0).clamp(0, 100) as i32);
+                    }
+                    if let Some(v) = plan_status.get("daily_quota_reset_timestamp").and_then(|v| v.as_i64()) {
+                        updated_account.daily_quota_reset_timestamp = Some(v);
+                    }
+                    if let Some(v) = plan_status.get("weekly_quota_reset_timestamp").and_then(|v| v.as_i64()) {
+                        updated_account.weekly_quota_reset_timestamp = Some(v);
+                    }
+                    store.update_account(updated_account.clone()).await
+                        .map_err(|e| format!("保存账户信息失败: {}", e))?;
+                }
+            }
+        }
     }
     
     // 如果使用轻量级 API 或者之前没有获取到，需要单独获取 is_team_owner
@@ -262,7 +292,11 @@ pub async fn login_account(
         "total_quota": updated_account.total_quota,
         "subscription_expires_at": updated_account.subscription_expires_at.map(|dt| dt.to_rfc3339()),
         "is_disabled": updated_account.is_disabled,
-        "is_team_owner": updated_account.is_team_owner
+        "is_team_owner": updated_account.is_team_owner,
+        "daily_quota_remaining_percent": updated_account.daily_quota_remaining_percent,
+        "weekly_quota_remaining_percent": updated_account.weekly_quota_remaining_percent,
+        "daily_quota_reset_timestamp": updated_account.daily_quota_reset_timestamp,
+        "weekly_quota_reset_timestamp": updated_account.weekly_quota_reset_timestamp
     }))
 }
 
@@ -353,11 +387,15 @@ pub async fn refresh_token(
                     
                     // ====== 弹性计费（Usage Allowance）字段 ======
                     // proto field_14/15 直接返回剩余百分比（remaining%），与官网一致，无需转换
-                    if let Some(v) = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                        updated_account.daily_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
-                    }
-                    if let Some(v) = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                        updated_account.weekly_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
+                    // 注意：proto 不返回 field_14 时表示 daily 用完了（0% remaining）
+                    let daily_remaining = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64());
+                    let weekly_remaining = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64());
+                    let has_elastic = daily_remaining.is_some() || weekly_remaining.is_some()
+                        || plan_status.get("daily_quota_reset_timestamp").is_some()
+                        || plan_status.get("weekly_quota_reset_timestamp").is_some();
+                    if has_elastic {
+                        updated_account.daily_quota_remaining_percent = Some(daily_remaining.unwrap_or(0).clamp(0, 100) as i32);
+                        updated_account.weekly_quota_remaining_percent = Some(weekly_remaining.unwrap_or(0).clamp(0, 100) as i32);
                     }
                     if let Some(v) = plan_status.get("daily_quota_reset_timestamp").and_then(|v| v.as_i64()) {
                         updated_account.daily_quota_reset_timestamp = Some(v);
@@ -420,6 +458,30 @@ pub async fn refresh_token(
                 updated_account.last_quota_update = Some(chrono::Utc::now());
                 store.update_account(updated_account.clone()).await
                     .map_err(|e| format!("保存账户信息失败: {}", e))?;
+            }
+        }
+        // 非轻量级 API（GetCurrentUser）不含弹性计费字段，补调 GetPlanStatus
+        if let Ok(plan_result) = windsurf_service.get_plan_status(&token).await {
+            if plan_result.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+                if let Some(plan_status) = plan_result.get("plan_status") {
+                    let daily_remaining = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64());
+                    let weekly_remaining = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64());
+                    let has_elastic = daily_remaining.is_some() || weekly_remaining.is_some()
+                        || plan_status.get("daily_quota_reset_timestamp").is_some()
+                        || plan_status.get("weekly_quota_reset_timestamp").is_some();
+                    if has_elastic {
+                        updated_account.daily_quota_remaining_percent = Some(daily_remaining.unwrap_or(0).clamp(0, 100) as i32);
+                        updated_account.weekly_quota_remaining_percent = Some(weekly_remaining.unwrap_or(0).clamp(0, 100) as i32);
+                    }
+                    if let Some(v) = plan_status.get("daily_quota_reset_timestamp").and_then(|v| v.as_i64()) {
+                        updated_account.daily_quota_reset_timestamp = Some(v);
+                    }
+                    if let Some(v) = plan_status.get("weekly_quota_reset_timestamp").and_then(|v| v.as_i64()) {
+                        updated_account.weekly_quota_reset_timestamp = Some(v);
+                    }
+                    store.update_account(updated_account.clone()).await
+                        .map_err(|e| format!("保存账户信息失败: {}", e))?;
+                }
             }
         }
     }
@@ -521,11 +583,15 @@ pub async fn get_plan_status(
             
             // ====== 弹性计费（Usage Allowance）字段 ======
             // proto field_14/15 直接返回剩余百分比（remaining%），与官网一致，无需转换
-            if let Some(v) = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                updated_account.daily_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
-            }
-            if let Some(v) = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                updated_account.weekly_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
+            // 注意：proto 不返回 field_14 时表示 daily 用完了（0% remaining）
+            let daily_remaining = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64());
+            let weekly_remaining = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64());
+            let has_elastic = daily_remaining.is_some() || weekly_remaining.is_some()
+                || plan_status.get("daily_quota_reset_timestamp").is_some()
+                || plan_status.get("weekly_quota_reset_timestamp").is_some();
+            if has_elastic {
+                updated_account.daily_quota_remaining_percent = Some(daily_remaining.unwrap_or(0).clamp(0, 100) as i32);
+                updated_account.weekly_quota_remaining_percent = Some(weekly_remaining.unwrap_or(0).clamp(0, 100) as i32);
             }
             if let Some(v) = plan_status.get("daily_quota_reset_timestamp").and_then(|v| v.as_i64()) {
                 updated_account.daily_quota_reset_timestamp = Some(v);
@@ -1510,11 +1576,15 @@ async fn refresh_token_internal(
                     
                     // ====== 弹性计费（Usage Allowance）字段 ======
                     // proto field_14/15 直接返回剩余百分比（remaining%），与官网一致，无需转换
-                    if let Some(v) = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                        updated_account.daily_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
-                    }
-                    if let Some(v) = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64()) {
-                        updated_account.weekly_quota_remaining_percent = Some(v.clamp(0, 100) as i32);
+                    // 注意：proto 不返回 field_14 时表示 daily 用完了（0% remaining）
+                    let daily_remaining = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64());
+                    let weekly_remaining = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64());
+                    let has_elastic = daily_remaining.is_some() || weekly_remaining.is_some()
+                        || plan_status.get("daily_quota_reset_timestamp").is_some()
+                        || plan_status.get("weekly_quota_reset_timestamp").is_some();
+                    if has_elastic {
+                        updated_account.daily_quota_remaining_percent = Some(daily_remaining.unwrap_or(0).clamp(0, 100) as i32);
+                        updated_account.weekly_quota_remaining_percent = Some(weekly_remaining.unwrap_or(0).clamp(0, 100) as i32);
                     }
                     if let Some(v) = plan_status.get("daily_quota_reset_timestamp").and_then(|v| v.as_i64()) {
                         updated_account.daily_quota_reset_timestamp = Some(v);
@@ -1573,6 +1643,28 @@ async fn refresh_token_internal(
                 updated_account.is_team_owner = Some(is_root_admin);
 
                 updated_account.last_quota_update = Some(chrono::Utc::now());
+            }
+        }
+        // 非轻量级 API（GetCurrentUser）不含弹性计费字段，补调 GetPlanStatus
+        if let Ok(plan_result) = windsurf_service.get_plan_status(&token).await {
+            if plan_result.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+                if let Some(plan_status) = plan_result.get("plan_status") {
+                    let daily_remaining = plan_status.get("daily_quota_remaining_percent").and_then(|v| v.as_i64());
+                    let weekly_remaining = plan_status.get("weekly_quota_remaining_percent").and_then(|v| v.as_i64());
+                    let has_elastic = daily_remaining.is_some() || weekly_remaining.is_some()
+                        || plan_status.get("daily_quota_reset_timestamp").is_some()
+                        || plan_status.get("weekly_quota_reset_timestamp").is_some();
+                    if has_elastic {
+                        updated_account.daily_quota_remaining_percent = Some(daily_remaining.unwrap_or(0).clamp(0, 100) as i32);
+                        updated_account.weekly_quota_remaining_percent = Some(weekly_remaining.unwrap_or(0).clamp(0, 100) as i32);
+                    }
+                    if let Some(v) = plan_status.get("daily_quota_reset_timestamp").and_then(|v| v.as_i64()) {
+                        updated_account.daily_quota_reset_timestamp = Some(v);
+                    }
+                    if let Some(v) = plan_status.get("weekly_quota_reset_timestamp").and_then(|v| v.as_i64()) {
+                        updated_account.weekly_quota_reset_timestamp = Some(v);
+                    }
+                }
             }
         }
     }
