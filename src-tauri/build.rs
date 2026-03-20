@@ -81,7 +81,7 @@ fn main() {
   <assemblyIdentity
     version="{}"
     processorArchitecture="*"
-    name="com.chao.windsurf-account-manager"
+    name="com.chuankangkk.windsurf-account-manager"
     type="win32"
   />
   <description>Windsurf Account Manager</description>
