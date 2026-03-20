@@ -36,7 +36,7 @@
 
     <div class="card-body">
       <!-- 配额和套餐信息 -->
-      <div class="quota-section" v-if="account.total_quota">
+      <div class="quota-section" v-if="account.total_quota && !hasElasticQuota">
         <div class="quota-header">
           <div class="quota-header-left">
             <el-tag v-if="account.plan_name" :class="['plan-tag', `plan-${account.plan_name?.toLowerCase()}`]" size="small">
@@ -87,16 +87,16 @@
             </el-tag>
           </div>
         </div>
-        <!-- 每日配额 -->
+        <!-- 每日配额已用 -->
         <div class="elastic-quota-row" v-if="account.dailyQuotaRemainingPercent !== undefined">
           <div class="elastic-quota-label">
-            <span>每日配额</span>
+            <span>Daily Usage</span>
             <span class="elastic-quota-value">{{ account.dailyQuotaRemainingPercent }}%</span>
           </div>
           <el-progress
             :percentage="account.dailyQuotaRemainingPercent"
             :stroke-width="6"
-            :color="getElasticQuotaColor(account.dailyQuotaRemainingPercent)"
+            :color="getUsageColor(account.dailyQuotaRemainingPercent)"
             :show-text="false"
           />
           <div class="elastic-quota-reset" v-if="dailyResetText">
@@ -104,16 +104,16 @@
             <span>{{ dailyResetText }}</span>
           </div>
         </div>
-        <!-- 每周配额 -->
+        <!-- 每周配额已用 -->
         <div class="elastic-quota-row" v-if="account.weeklyQuotaRemainingPercent !== undefined">
           <div class="elastic-quota-label">
-            <span>每周配额</span>
+            <span>Weekly Usage</span>
             <span class="elastic-quota-value">{{ account.weeklyQuotaRemainingPercent }}%</span>
           </div>
           <el-progress
             :percentage="account.weeklyQuotaRemainingPercent"
             :stroke-width="6"
-            :color="getElasticQuotaColor(account.weeklyQuotaRemainingPercent)"
+            :color="getUsageColor(account.weeklyQuotaRemainingPercent)"
             :show-text="false"
           />
           <div class="elastic-quota-reset" v-if="weeklyResetText">
@@ -647,17 +647,16 @@ const quotaColor = computed(() => {
 });
 
 // ====== 弹性计费（Usage Allowance）相关 ======
-// 是否有弹性计费数据（且没有旧积分数据时显示）
+// 是否有弹性计费数据（有弹性计费数据时优先显示，替代旧积分区块）
 const hasElasticQuota = computed(() => {
-  return (props.account.dailyQuotaRemainingPercent !== undefined || 
-          props.account.weeklyQuotaRemainingPercent !== undefined) && 
-         !props.account.total_quota;
+  return props.account.dailyQuotaRemainingPercent !== undefined || 
+         props.account.weeklyQuotaRemainingPercent !== undefined;
 });
 
-// 弹性配额颜色（剩余百分比：高=绿，中=橙，低=红）
-function getElasticQuotaColor(percent: number): string {
-  if (percent > 50) return '#10b981';
-  if (percent > 20) return '#f59e0b';
+// 弹性计费已用百分比颜色（已用越少=绿，中=橙，已用越多=红）
+function getUsageColor(percent: number): string {
+  if (percent < 50) return '#10b981';
+  if (percent < 80) return '#f59e0b';
   return '#ef4444';
 }
 
