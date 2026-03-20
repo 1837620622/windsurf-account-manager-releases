@@ -3,7 +3,7 @@ name = "windsurf-account-manager"
 version = "2.0.1"
 description = "A Tauri App"
 authors = ["ck"]
-edition = "2026"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
