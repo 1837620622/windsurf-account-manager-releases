@@ -32,6 +32,15 @@
     .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
     .stat-value { font-size: 36px; font-weight: 800; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
     .stat-label { color: #909399; margin-top: 6px; font-size: 13px; }
+    .native-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .native-table thead { position: sticky; top: 0; z-index: 1; }
+    .native-table th { background: #f5f7fa; color: #606266; font-weight: 600; padding: 10px 12px; text-align: left; border-bottom: 2px solid #ebeef5; white-space: nowrap; }
+    .native-table td { padding: 10px 12px; border-bottom: 1px solid #ebeef5; color: #303133; }
+    .native-table tbody tr:hover { background: #ecf5ff; }
+    .native-table tbody tr:nth-child(even) { background: #fafafa; }
+    .native-table tbody tr:nth-child(even):hover { background: #ecf5ff; }
+    .cell-email { font-weight: 500; white-space: nowrap; }
+    .cell-pwd { font-family: 'SF Mono', Consolas, monospace; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -70,42 +79,44 @@
           <el-button type="warning" @click="exportJSON">导出JSON</el-button>
         </div>
 
-        <el-table :data="filteredAccounts" stripe max-height="600" style="width:100%" table-layout="auto"
-                  :default-sort="{prop:'created_at', order:'descending'}" @sort-change="handleSort">
-          <el-table-column type="index" label="#" />
-          <el-table-column prop="email" label="邮箱" sortable="custom" />
-          <el-table-column prop="password" label="密码" />
-          <el-table-column prop="plan_type" label="套餐" sortable="custom">
-            <template #default="{row}">
-              <el-tag :type="planTagType(row.plan_type)" size="small">{{ row.plan_type || '-' }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="status" label="状态">
-            <template #default="{row}">
-              <el-tag :type="row.status==='active'?'success':'danger'" size="small">{{ row.status }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="配额">
-            <template #default="{row}">{{ row.used_quota || 0 }}/{{ row.total_quota || 0 }}</template>
-          </el-table-column>
-          <el-table-column label="每日">
-            <template #default="{row}">
-              <span v-if="row.daily_quota_remaining_percent != null" :style="{color: row.daily_quota_remaining_percent < 20 ? '#f56c6c' : '#67c23a'}">{{ row.daily_quota_remaining_percent?.toFixed(0) }}%</span>
-              <span v-else>-</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="subscription_expires_at" label="到期时间" sortable="custom">
-            <template #default="{row}">{{ row.subscription_expires_at ? formatDate(row.subscription_expires_at) : '-' }}</template>
-          </el-table-column>
-          <el-table-column prop="last_login_at" label="最后登录" sortable="custom">
-            <template #default="{row}">{{ row.last_login_at ? timeAgo(row.last_login_at) : '-' }}</template>
-          </el-table-column>
-          <el-table-column label="操作">
-            <template #default="{row}">
-              <el-button type="danger" size="small" link @click="confirmDelete(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div style="overflow-x:auto; max-height:600px; overflow-y:auto;">
+          <table class="native-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>邮箱</th>
+                <th>密码</th>
+                <th>套餐</th>
+                <th>状态</th>
+                <th>配额</th>
+                <th>每日</th>
+                <th>到期</th>
+                <th>最后登录</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, idx) in filteredAccounts" :key="row.id">
+                <td>{{ idx + 1 }}</td>
+                <td class="cell-email">{{ row.email }}</td>
+                <td class="cell-pwd">{{ row.password || '-' }}</td>
+                <td><el-tag :type="planTagType(row.plan_type)" size="small">{{ row.plan_type || '-' }}</el-tag></td>
+                <td><el-tag :type="row.status==='active'?'success':'danger'" size="small">{{ row.status }}</el-tag></td>
+                <td>{{ row.used_quota || 0 }}/{{ row.total_quota || 0 }}</td>
+                <td>
+                  <span v-if="row.daily_quota_remaining_percent != null" :style="{color: row.daily_quota_remaining_percent < 20 ? '#f56c6c' : '#67c23a'}">{{ row.daily_quota_remaining_percent?.toFixed(0) }}%</span>
+                  <span v-else>-</span>
+                </td>
+                <td>{{ row.subscription_expires_at ? formatDate(row.subscription_expires_at) : '-' }}</td>
+                <td>{{ row.last_login_at ? timeAgo(row.last_login_at) : '-' }}</td>
+                <td><el-button type="danger" size="small" link @click="confirmDelete(row)">删除</el-button></td>
+              </tr>
+              <tr v-if="filteredAccounts.length === 0">
+                <td colspan="10" style="text-align:center; color:#909399; padding:40px;">暂无数据</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </el-tab-pane>
 
       <!-- 登录记录 -->
