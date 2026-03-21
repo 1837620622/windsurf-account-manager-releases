@@ -28,3 +28,14 @@ src-tauri/gen/
 *.sln
 *.sw?
 Thumbs.db
+
+# 研究/抓包数据（敏感，不要提交）
+Windsurf弹性扣分机制研究/
+*.json.bak
+
+# Supabase 本地开发
+supabase/.temp/
+
+# 临时文件
+*.tmp
+*.bak

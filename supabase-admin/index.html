@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windsurf 账号云端管理后台</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus/dist/index.css">
+  <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/element-plus"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@element-plus/icons-vue"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs/dayjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs/plugin/relativeTime.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs/locale/zh-cn.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; }
+    .app-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
+    .app-header h1 { font-size: 20px; font-weight: 600; }
+    .app-header .stats { display: flex; gap: 16px; font-size: 14px; }
+    .app-header .stat-item { background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 16px; }
+    .main-container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    .tab-content { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-top: 16px; }
+    .toolbar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+    .password-cell { font-family: monospace; cursor: pointer; }
+    .password-cell:hover { color: #409eff; }
+    .quota-bar { width: 100px; height: 6px; background: #eee; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 6px; }
+    .quota-bar-inner { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <!-- 顶部栏 -->
+  <div class="app-header">
+    <h1>Windsurf 账号云端管理后台</h1>
+    <div class="stats">
+      <span class="stat-item">账号: {{ accounts.length }}</span>
+      <span class="stat-item">登录记录: {{ loginRecords.length }}</span>
+      <span class="stat-item" :style="{background: connected ? 'rgba(103,194,58,0.3)' : 'rgba(245,108,108,0.3)'}">
+        {{ connected ? '已连接' : '未连接' }}
+      </span>
+    </div>
+  </div>
+
+  <div class="main-container">
+    <!-- 标签页 -->
+    <el-tabs v-model="activeTab" type="border-card">
+      <!-- 账号列表 -->
+      <el-tab-pane label="账号列表" name="accounts">
+        <div class="toolbar">
+          <el-input v-model="searchText" placeholder="搜索邮箱/备注/套餐..." clearable style="width:280px;" @input="filterAccounts">
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
+          <el-select v-model="filterPlan" placeholder="筛选套餐" clearable style="width:150px;" @change="filterAccounts">
+            <el-option v-for="p in planTypes" :key="p" :label="p" :value="p" />
+          </el-select>
+          <el-select v-model="filterStatus" placeholder="筛选状态" clearable style="width:120px;" @change="filterAccounts">
+            <el-option label="active" value="active" />
+            <el-option label="inactive" value="inactive" />
+            <el-option label="error" value="error" />
+          </el-select>
+          <el-button type="primary" @click="loadAccounts" :loading="loadingAccounts">刷新</el-button>
+          <el-button type="success" @click="exportCSV">导出CSV</el-button>
+          <el-button type="warning" @click="exportJSON">导出JSON</el-button>
+        </div>
+
+        <el-table :data="filteredAccounts" stripe border max-height="600" style="width:100%"
+                  :default-sort="{prop:'created_at', order:'descending'}" @sort-change="handleSort">
+          <el-table-column type="index" width="50" />
+          <el-table-column prop="email" label="邮箱" min-width="200" sortable="custom" show-overflow-tooltip />
+          <el-table-column prop="password" label="密码" width="140">
+            <template #default="{row}">
+              <span class="password-cell" @click="togglePassword(row)" :title="row._showPwd ? row.password : '点击显示'">
+                {{ row._showPwd ? (row.password || '-') : (row.password ? '••••••••' : '-') }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="plan_type" label="套餐" width="110" sortable="custom">
+            <template #default="{row}">
+              <el-tag :type="planTagType(row.plan_type)" size="small">{{ row.plan_type || 'unknown' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="90" sortable="custom">
+            <template #default="{row}">
+              <el-tag :type="row.status==='active'?'success':row.status==='error'?'danger':'info'" size="small">{{ row.status }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="配额" width="160">
+            <template #default="{row}">
+              <span>{{ row.used_quota || 0 }}/{{ row.total_quota || 0 }}</span>
+              <div class="quota-bar" v-if="row.total_quota > 0">
+                <div class="quota-bar-inner" :style="{width: Math.min(100, (row.used_quota/row.total_quota)*100)+'%', background: quotaColor(row)}"></div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="每日剩余" width="90">
+            <template #default="{row}">
+              <span v-if="row.daily_quota_remaining_percent != null" :style="{color: row.daily_quota_remaining_percent < 20 ? '#f56c6c' : '#67c23a'}">
+                {{ row.daily_quota_remaining_percent?.toFixed(1) }}%
+              </span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="nickname" label="备注" width="100" show-overflow-tooltip />
+          <el-table-column prop="is_disabled" label="禁用" width="60">
+            <template #default="{row}"><el-tag v-if="row.is_disabled" type="danger" size="small">是</el-tag><span v-else>-</span></template>
+          </el-table-column>
+          <el-table-column prop="subscription_expires_at" label="订阅到期" width="110" sortable="custom">
+            <template #default="{row}">{{ row.subscription_expires_at ? formatDate(row.subscription_expires_at) : '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="last_login_at" label="最后登录" width="110" sortable="custom">
+            <template #default="{row}">{{ row.last_login_at ? timeAgo(row.last_login_at) : '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="created_at" label="创建时间" width="110" sortable="custom">
+            <template #default="{row}">{{ formatDate(row.created_at) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="80" fixed="right">
+            <template #default="{row}">
+              <el-popconfirm title="确定删除此账号？" @confirm="deleteAccount(row)">
+                <template #reference><el-button type="danger" size="small" link>删除</el-button></template>
+              </el-popconfirm>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <!-- 登录记录 -->
+      <el-tab-pane label="登录记录" name="records">
+        <div class="toolbar">
+          <el-input v-model="recordSearch" placeholder="搜索邮箱..." clearable style="width:250px;" />
+          <el-select v-model="recordAction" placeholder="操作类型" clearable style="width:140px;">
+            <el-option label="登录" value="login" />
+            <el-option label="刷新Token" value="refresh_token" />
+          </el-select>
+          <el-select v-model="recordSuccess" placeholder="结果" clearable style="width:100px;">
+            <el-option label="成功" :value="true" />
+            <el-option label="失败" :value="false" />
+          </el-select>
+          <el-button type="primary" @click="loadLoginRecords" :loading="loadingRecords">刷新</el-button>
+        </div>
+
+        <el-table :data="filteredRecords" stripe border max-height="600" style="width:100%">
+          <el-table-column type="index" width="50" />
+          <el-table-column prop="email" label="邮箱" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="action" label="操作" width="110">
+            <template #default="{row}">
+              <el-tag :type="row.action==='login'?'primary':'warning'" size="small">{{ row.action==='login'?'登录':'刷新Token' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="success" label="结果" width="80">
+            <template #default="{row}">
+              <el-tag :type="row.success?'success':'danger'" size="small">{{ row.success?'成功':'失败' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="plan_type" label="套餐" width="100">
+            <template #default="{row}"><el-tag size="small" v-if="row.plan_type">{{ row.plan_type }}</el-tag><span v-else>-</span></template>
+          </el-table-column>
+          <el-table-column prop="error_message" label="错误信息" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="device_info" label="设备" width="120" show-overflow-tooltip />
+          <el-table-column prop="login_at" label="时间" width="160">
+            <template #default="{row}">{{ formatDateTime(row.login_at) }}</template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <!-- 统计面板 -->
+      <el-tab-pane label="统计面板" name="stats">
+        <el-row :gutter="16">
+          <el-col :span="6" v-for="item in statCards" :key="item.label">
+            <el-card shadow="hover" style="text-align:center; margin-bottom:16px;">
+              <div style="font-size:32px; font-weight:700; color:#409eff;">{{ item.value }}</div>
+              <div style="color:#909399; margin-top:4px;">{{ item.label }}</div>
+            </el-card>
+          </el-col>
+        </el-row>
+        <el-card shadow="hover" style="margin-top:8px;">
+          <template #header><span style="font-weight:600;">套餐分布</span></template>
+          <div v-for="(count, plan) in planDistribution" :key="plan" style="display:flex; align-items:center; margin-bottom:8px;">
+            <el-tag :type="planTagType(plan)" style="width:100px; text-align:center;">{{ plan }}</el-tag>
+            <el-progress :percentage="Math.round(count/accounts.length*100)" :stroke-width="18" style="flex:1; margin-left:12px;"
+                         :color="planColor(plan)" />
+            <span style="margin-left:8px; color:#606266; min-width:50px;">{{ count }} 个</span>
+          </div>
+        </el-card>
+      </el-tab-pane>
+
+      <!-- 操作日志 -->
+      <el-tab-pane label="操作日志" name="logs">
+        <div class="toolbar">
+          <el-button type="primary" @click="loadOperationLogs" :loading="loadingLogs">刷新</el-button>
+        </div>
+        <el-table :data="operationLogs" stripe border max-height="600" style="width:100%">
+          <el-table-column type="index" width="50" />
+          <el-table-column prop="action" label="操作" width="140" />
+          <el-table-column prop="target_email" label="目标" min-width="200" />
+          <el-table-column prop="detail" label="详情" min-width="200">
+            <template #default="{row}">{{ JSON.stringify(row.detail) }}</template>
+          </el-table-column>
+          <el-table-column prop="created_at" label="时间" width="160">
+            <template #default="{row}">{{ formatDateTime(row.created_at) }}</template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+    </el-tabs>
+  </div>
+</div>
+
+<script>
+dayjs.extend(dayjs_plugin_relativeTime);
+dayjs.locale('zh-cn');
+
+const { createApp, ref, computed, onMounted } = Vue;
+const { ElMessage, ElMessageBox } = ElementPlus;
+
+const SUPABASE_URL = 'https://omqgvexendjycxzhyrii.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tcWd2ZXhlbmRqeWN4emh5cmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTUxNjksImV4cCI6MjA4OTY3MTE2OX0.H_NgiwZoRuAYMOUftsNIqSemoipA__AfMZ1j7xd_eBk';
+
+async function supaFetch(table, params = {}) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url, {
+    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+  });
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function supaDelete(table, params) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+  });
+  if (!res.ok) throw new Error(`${res.status}`);
+}
+
+const app = createApp({
+  setup() {
+    const activeTab = ref('accounts');
+    const connected = ref(false);
+    const accounts = ref([]);
+    const loginRecords = ref([]);
+    const operationLogs = ref([]);
+    const loadingAccounts = ref(false);
+    const loadingRecords = ref(false);
+    const loadingLogs = ref(false);
+    const searchText = ref('');
+    const filterPlan = ref('');
+    const filterStatus = ref('');
+    const recordSearch = ref('');
+    const recordAction = ref('');
+    const recordSuccess = ref('');
+
+    const planTypes = computed(() => [...new Set(accounts.value.map(a => a.plan_type || 'unknown'))]);
+
+    const filteredAccounts = computed(() => {
+      let list = accounts.value;
+      if (searchText.value) {
+        const s = searchText.value.toLowerCase();
+        list = list.filter(a => (a.email||'').toLowerCase().includes(s) || (a.nickname||'').toLowerCase().includes(s) || (a.plan_type||'').toLowerCase().includes(s));
+      }
+      if (filterPlan.value) list = list.filter(a => a.plan_type === filterPlan.value);
+      if (filterStatus.value) list = list.filter(a => a.status === filterStatus.value);
+      return list;
+    });
+
+    const filteredRecords = computed(() => {
+      let list = loginRecords.value;
+      if (recordSearch.value) { const s = recordSearch.value.toLowerCase(); list = list.filter(r => (r.email||'').toLowerCase().includes(s)); }
+      if (recordAction.value) list = list.filter(r => r.action === recordAction.value);
+      if (recordSuccess.value !== '') list = list.filter(r => r.success === recordSuccess.value);
+      return list;
+    });
+
+    const planDistribution = computed(() => {
+      const dist = {};
+      accounts.value.forEach(a => { const p = a.plan_type || 'unknown'; dist[p] = (dist[p]||0) + 1; });
+      return dist;
+    });
+
+    const statCards = computed(() => {
+      const total = accounts.value.length;
+      const active = accounts.value.filter(a => a.status === 'active').length;
+      const disabled = accounts.value.filter(a => a.is_disabled).length;
+      const todayLogins = loginRecords.value.filter(r => dayjs(r.login_at).isAfter(dayjs().startOf('day'))).length;
+      return [
+        { label: '总账号数', value: total },
+        { label: '活跃账号', value: active },
+        { label: '已禁用', value: disabled },
+        { label: '今日登录', value: todayLogins },
+      ];
+    });
+
+    async function loadAccounts() {
+      loadingAccounts.value = true;
+      try {
+        accounts.value = (await supaFetch('windsurf_accounts', { select: '*', order: 'created_at.desc' })).map(a => ({ ...a, _showPwd: false }));
+        connected.value = true;
+        ElMessage.success(`加载 ${accounts.value.length} 个账号`);
+      } catch (e) { ElMessage.error('加载失败: ' + e.message); connected.value = false; }
+      finally { loadingAccounts.value = false; }
+    }
+
+    async function loadLoginRecords() {
+      loadingRecords.value = true;
+      try {
+        loginRecords.value = await supaFetch('login_records', { select: '*', order: 'login_at.desc', limit: '500' });
+        ElMessage.success(`加载 ${loginRecords.value.length} 条记录`);
+      } catch (e) { ElMessage.error('加载失败: ' + e.message); }
+      finally { loadingRecords.value = false; }
+    }
+
+    async function loadOperationLogs() {
+      loadingLogs.value = true;
+      try {
+        operationLogs.value = await supaFetch('operation_logs', { select: '*', order: 'created_at.desc', limit: '200' });
+      } catch (e) { ElMessage.error('加载失败: ' + e.message); }
+      finally { loadingLogs.value = false; }
+    }
+
+    async function deleteAccount(row) {
+      try {
+        await supaDelete('login_records', { email: `eq.${row.email}` });
+        await supaDelete('windsurf_accounts', { email: `eq.${row.email}` });
+        accounts.value = accounts.value.filter(a => a.id !== row.id);
+        ElMessage.success('已删除');
+      } catch (e) { ElMessage.error('删除失败: ' + e.message); }
+    }
+
+    function togglePassword(row) { row._showPwd = !row._showPwd; }
+
+    function handleSort({ prop, order }) {
+      if (!prop || !order) return;
+      const dir = order === 'ascending' ? 1 : -1;
+      accounts.value.sort((a, b) => {
+        const va = a[prop] ?? '', vb = b[prop] ?? '';
+        return typeof va === 'string' ? va.localeCompare(vb) * dir : (va - vb) * dir;
+      });
+    }
+
+    function exportCSV() {
+      const headers = ['email','password','plan_type','status','nickname','used_quota','total_quota','daily_quota_remaining_percent','subscription_expires_at','last_login_at','created_at'];
+      const rows = [headers.join(',')];
+      filteredAccounts.value.forEach(a => {
+        rows.push(headers.map(h => { const v = a[h]; if (v == null) return ''; const s = String(v); return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g,'""')}"` : s; }).join(','));
+      });
+      downloadFile(rows.join('\n'), 'windsurf_accounts.csv', 'text/csv');
+    }
+
+    function exportJSON() {
+      const data = filteredAccounts.value.map(({ _showPwd, ...rest }) => rest);
+      downloadFile(JSON.stringify(data, null, 2), 'windsurf_accounts.json', 'application/json');
+    }
+
+    function downloadFile(content, filename, type) {
+      const blob = new Blob(['\uFEFF' + content], { type: type + ';charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    function formatDate(d) { return d ? dayjs(d).format('YYYY-MM-DD') : '-'; }
+    function formatDateTime(d) { return d ? dayjs(d).format('YYYY-MM-DD HH:mm:ss') : '-'; }
+    function timeAgo(d) { return d ? dayjs(d).fromNow() : '-'; }
+    function planTagType(p) { const m = { Pro: 'warning', Team: 'success', Teams: 'success', Max: 'danger', Free: 'info' }; return m[p] || ''; }
+    function planColor(p) { const m = { Pro: '#e6a23c', Team: '#67c23a', Teams: '#67c23a', Max: '#f56c6c', Free: '#909399' }; return m[p] || '#409eff'; }
+    function quotaColor(row) { const pct = row.total_quota > 0 ? row.used_quota / row.total_quota : 0; return pct > 0.8 ? '#f56c6c' : pct > 0.5 ? '#e6a23c' : '#67c23a'; }
+
+    onMounted(() => { loadAccounts(); loadLoginRecords(); loadOperationLogs(); });
+
+    return {
+      activeTab, connected, accounts, loginRecords, operationLogs,
+      loadingAccounts, loadingRecords, loadingLogs,
+      searchText, filterPlan, filterStatus, recordSearch, recordAction, recordSuccess,
+      planTypes, filteredAccounts, filteredRecords, planDistribution, statCards,
+      loadAccounts, loadLoginRecords, loadOperationLogs, deleteAccount,
+      togglePassword, handleSort, exportCSV, exportJSON,
+      formatDate, formatDateTime, timeAgo, planTagType, planColor, quotaColor,
+    };
+  }
+});
+
+app.use(ElementPlus);
+if (typeof ElementPlusIconsVue !== 'undefined') {
+  for (const [key, component] of Object.entries(ElementPlusIconsVue)) { app.component(key, component); }
+}
+app.mount('#app');
+</script>
+</body>
+</html>
