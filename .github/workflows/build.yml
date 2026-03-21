@@ -337,9 +337,22 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
-      # 同时发布到私有仓库（备份）
+      # 先收集文件到安全目录（checkout会清除artifacts）
+      - name: Collect release files
+        run: |
+          mkdir -p /tmp/release-files
+          find artifacts -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.dmg" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) -exec cp {} /tmp/release-files/ \;
+          echo "=== 待上传文件 ==="
+          ls -lh /tmp/release-files/
+
+      # 发布到私有仓库（备份）
       - name: Checkout private repo
         uses: actions/checkout@v4
+
+      - name: Copy artifacts back for softprops
+        run: |
+          mkdir -p artifacts
+          cp /tmp/release-files/* artifacts/ 2>/dev/null || true
 
       - name: Create Release (Private Repo Backup)
         uses: softprops/action-gh-release@v1
@@ -348,23 +361,9 @@ jobs:
           tag_name: ${{ needs.get-version.outputs.tag_name }}
           draft: true
           prerelease: false
-          files: |
-            artifacts/**/*.exe
-            artifacts/**/*.msi
-            artifacts/**/*.dmg
-            artifacts/**/*.deb
-            artifacts/**/*.rpm
-            artifacts/**/*.AppImage
+          files: artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 发布到公开仓库（用gh CLI直接上传，避免softprops跨仓库bug）
-      - name: Collect release files
-        run: |
-          mkdir -p release-files
-          find artifacts -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.dmg" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) -exec cp {} release-files/ \;
-          echo "=== 待上传文件 ==="
-          ls -lh release-files/
 
       - name: Create Release in Public Repo via gh CLI
         env:
@@ -396,7 +395,7 @@ jobs:
           gh api "repos/$REPO/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA" 2>/dev/null || true
           
           # 创建Release并上传所有文件
-          gh release create "$TAG" release-files/* \
+          gh release create "$TAG" /tmp/release-files/* \
             --repo "$REPO" \
             --title "Windsurf Account Manager v${VERSION}" \
             --notes "$BODY" \
