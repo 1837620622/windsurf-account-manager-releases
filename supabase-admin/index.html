@@ -13,18 +13,25 @@
   <script src="https://cdn.jsdelivr.net/npm/dayjs/locale/zh-cn.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; }
-    .app-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
-    .app-header h1 { font-size: 20px; font-weight: 600; }
-    .app-header .stats { display: flex; gap: 16px; font-size: 14px; }
-    .app-header .stat-item { background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 16px; }
-    .main-container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-    .tab-content { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-top: 16px; }
-    .toolbar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-    .password-cell { font-family: monospace; cursor: pointer; }
-    .password-cell:hover { color: #409eff; }
-    .quota-bar { width: 100px; height: 6px; background: #eee; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 6px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; min-height: 100vh; }
+    .app-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 20px 32px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+    .app-header h1 { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
+    .app-header .stats { display: flex; gap: 12px; font-size: 13px; }
+    .app-header .stat-item { background: rgba(255,255,255,0.2); padding: 6px 16px; border-radius: 20px; backdrop-filter: blur(4px); font-weight: 500; }
+    .main-container { max-width: 1440px; margin: 0 auto; padding: 24px; }
+    .toolbar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .password-cell { font-family: 'SF Mono', 'Consolas', monospace; cursor: pointer; font-size: 13px; color: #606266; }
+    .password-cell:hover { color: #409eff; text-decoration: underline; }
+    .quota-bar { width: 80px; height: 6px; background: #ebeef5; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 6px; }
     .quota-bar-inner { height: 100%; border-radius: 3px; transition: width 0.3s; }
+    .el-tabs--border-card { border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08); border: none; }
+    .el-table { font-size: 13px; }
+    .el-table th { background: #fafafa !important; font-weight: 600; }
+    .el-card { border-radius: 12px; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .stat-card { text-align: center; transition: transform 0.2s; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+    .stat-value { font-size: 36px; font-weight: 800; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
+    .stat-label { color: #909399; margin-top: 6px; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -59,65 +66,35 @@
             <el-option label="error" value="error" />
           </el-select>
           <el-button type="primary" @click="loadAccounts" :loading="loadingAccounts">刷新</el-button>
-          <el-button type="success" @click="exportCSV">导出CSV</el-button>
+          <el-button type="success" @click="exportTXT">导出TXT</el-button>
           <el-button type="warning" @click="exportJSON">导出JSON</el-button>
         </div>
 
-        <el-table :data="filteredAccounts" stripe border max-height="600" style="width:100%"
+        <el-table :data="filteredAccounts" stripe max-height="600" style="width:100%" table-layout="auto"
                   :default-sort="{prop:'created_at', order:'descending'}" @sort-change="handleSort">
-          <el-table-column type="index" width="50" />
-          <el-table-column prop="email" label="邮箱" min-width="200" sortable="custom" show-overflow-tooltip />
-          <el-table-column prop="password" label="密码" width="140">
+          <el-table-column type="index" label="#" />
+          <el-table-column prop="email" label="邮箱" sortable="custom" />
+          <el-table-column prop="password" label="密码" />
+          <el-table-column prop="plan_type" label="套餐" sortable="custom">
             <template #default="{row}">
-              <span class="password-cell" @click="togglePassword(row)" :title="row._showPwd ? row.password : '点击显示'">
-                {{ row._showPwd ? (row.password || '-') : (row.password ? '••••••••' : '-') }}
-              </span>
+              <el-tag :type="planTagType(row.plan_type)" size="small">{{ row.plan_type || '-' }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="plan_type" label="套餐" width="110" sortable="custom">
-            <template #default="{row}">
-              <el-tag :type="planTagType(row.plan_type)" size="small">{{ row.plan_type || 'unknown' }}</el-tag>
-            </template>
+          <el-table-column label="配额">
+            <template #default="{row}">{{ row.used_quota || 0 }}/{{ row.total_quota || 0 }}</template>
           </el-table-column>
-          <el-table-column prop="status" label="状态" width="90" sortable="custom">
+          <el-table-column label="每日">
             <template #default="{row}">
-              <el-tag :type="row.status==='active'?'success':row.status==='error'?'danger':'info'" size="small">{{ row.status }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="配额" width="160">
-            <template #default="{row}">
-              <span>{{ row.used_quota || 0 }}/{{ row.total_quota || 0 }}</span>
-              <div class="quota-bar" v-if="row.total_quota > 0">
-                <div class="quota-bar-inner" :style="{width: Math.min(100, (row.used_quota/row.total_quota)*100)+'%', background: quotaColor(row)}"></div>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="每日剩余" width="90">
-            <template #default="{row}">
-              <span v-if="row.daily_quota_remaining_percent != null" :style="{color: row.daily_quota_remaining_percent < 20 ? '#f56c6c' : '#67c23a'}">
-                {{ row.daily_quota_remaining_percent?.toFixed(1) }}%
-              </span>
+              <span v-if="row.daily_quota_remaining_percent != null" :style="{color: row.daily_quota_remaining_percent < 20 ? '#f56c6c' : '#67c23a'}">{{ row.daily_quota_remaining_percent?.toFixed(0) }}%</span>
               <span v-else>-</span>
             </template>
           </el-table-column>
-          <el-table-column prop="nickname" label="备注" width="100" show-overflow-tooltip />
-          <el-table-column prop="is_disabled" label="禁用" width="60">
-            <template #default="{row}"><el-tag v-if="row.is_disabled" type="danger" size="small">是</el-tag><span v-else>-</span></template>
-          </el-table-column>
-          <el-table-column prop="subscription_expires_at" label="订阅到期" width="110" sortable="custom">
-            <template #default="{row}">{{ row.subscription_expires_at ? formatDate(row.subscription_expires_at) : '-' }}</template>
-          </el-table-column>
-          <el-table-column prop="last_login_at" label="最后登录" width="110" sortable="custom">
+          <el-table-column prop="last_login_at" label="最后登录" sortable="custom">
             <template #default="{row}">{{ row.last_login_at ? timeAgo(row.last_login_at) : '-' }}</template>
           </el-table-column>
-          <el-table-column prop="created_at" label="创建时间" width="110" sortable="custom">
-            <template #default="{row}">{{ formatDate(row.created_at) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="80" fixed="right">
+          <el-table-column label="操作">
             <template #default="{row}">
-              <el-popconfirm title="确定删除此账号？" @confirm="deleteAccount(row)">
-                <template #reference><el-button type="danger" size="small" link>删除</el-button></template>
-              </el-popconfirm>
+              <el-button type="danger" size="small" link @click="confirmDelete(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -164,11 +141,11 @@
 
       <!-- 统计面板 -->
       <el-tab-pane label="统计面板" name="stats">
-        <el-row :gutter="16">
+        <el-row :gutter="20">
           <el-col :span="6" v-for="item in statCards" :key="item.label">
-            <el-card shadow="hover" style="text-align:center; margin-bottom:16px;">
-              <div style="font-size:32px; font-weight:700; color:#409eff;">{{ item.value }}</div>
-              <div style="color:#909399; margin-top:4px;">{{ item.label }}</div>
+            <el-card shadow="hover" class="stat-card" style="margin-bottom:20px;">
+              <div class="stat-value">{{ item.value }}</div>
+              <div class="stat-label">{{ item.label }}</div>
             </el-card>
           </el-col>
         </el-row>
@@ -327,6 +304,13 @@ const app = createApp({
       } catch (e) { ElMessage.error('删除失败: ' + e.message); }
     }
 
+    async function confirmDelete(row) {
+      try {
+        await ElMessageBox.confirm(`确定删除账号 ${row.email} ？`, '删除确认', { type: 'warning' });
+        await deleteAccount(row);
+      } catch { /* 取消 */ }
+    }
+
     function togglePassword(row) { row._showPwd = !row._showPwd; }
 
     function handleSort({ prop, order }) {
@@ -338,13 +322,14 @@ const app = createApp({
       });
     }
 
-    function exportCSV() {
-      const headers = ['email','password','plan_type','status','nickname','used_quota','total_quota','daily_quota_remaining_percent','subscription_expires_at','last_login_at','created_at'];
-      const rows = [headers.join(',')];
-      filteredAccounts.value.forEach(a => {
-        rows.push(headers.map(h => { const v = a[h]; if (v == null) return ''; const s = String(v); return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g,'""')}"` : s; }).join(','));
+    function exportTXT() {
+      const rows = filteredAccounts.value.map(a => {
+        const email = a.email || '';
+        const pwd = a.password || '';
+        const plan = a.plan_type || 'unknown';
+        return `${email} ${pwd} ${plan}`;
       });
-      downloadFile(rows.join('\n'), 'windsurf_accounts.csv', 'text/csv');
+      downloadFile(rows.join('\n'), 'windsurf_accounts.txt', 'text/plain');
     }
 
     function exportJSON() {
@@ -375,8 +360,8 @@ const app = createApp({
       loadingAccounts, loadingRecords, loadingLogs,
       searchText, filterPlan, filterStatus, recordSearch, recordAction, recordSuccess,
       planTypes, filteredAccounts, filteredRecords, planDistribution, statCards,
-      loadAccounts, loadLoginRecords, loadOperationLogs, deleteAccount,
-      togglePassword, handleSort, exportCSV, exportJSON,
+      loadAccounts, loadLoginRecords, loadOperationLogs, deleteAccount, confirmDelete,
+      togglePassword, handleSort, exportTXT, exportJSON,
       formatDate, formatDateTime, timeAgo, planTagType, planColor, quotaColor,
     };
   }
