@@ -80,6 +80,11 @@
               <el-tag :type="planTagType(row.plan_type)" size="small">{{ row.plan_type || '-' }}</el-tag>
             </template>
           </el-table-column>
+          <el-table-column prop="status" label="状态">
+            <template #default="{row}">
+              <el-tag :type="row.status==='active'?'success':'danger'" size="small">{{ row.status }}</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="配额">
             <template #default="{row}">{{ row.used_quota || 0 }}/{{ row.total_quota || 0 }}</template>
           </el-table-column>
@@ -88,6 +93,9 @@
               <span v-if="row.daily_quota_remaining_percent != null" :style="{color: row.daily_quota_remaining_percent < 20 ? '#f56c6c' : '#67c23a'}">{{ row.daily_quota_remaining_percent?.toFixed(0) }}%</span>
               <span v-else>-</span>
             </template>
+          </el-table-column>
+          <el-table-column prop="subscription_expires_at" label="到期时间" sortable="custom">
+            <template #default="{row}">{{ row.subscription_expires_at ? formatDate(row.subscription_expires_at) : '-' }}</template>
           </el-table-column>
           <el-table-column prop="last_login_at" label="最后登录" sortable="custom">
             <template #default="{row}">{{ row.last_login_at ? timeAgo(row.last_login_at) : '-' }}</template>
