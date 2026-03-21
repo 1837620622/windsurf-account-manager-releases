@@ -425,6 +425,7 @@ import {
 } from '@element-plus/icons-vue';
 import type { Account } from '@/types';
 import { apiService, accountApi } from '@/api';
+import { supabaseService } from '@/api/supabaseService';
 import { useAccountsStore, useUIStore, useSettingsStore } from '@/store';
 import UpdateSeatsResultDialog from '@/components/UpdateSeatsResultDialog.vue';
 import CreditHistoryDialog from '@/components/CreditHistoryDialog.vue';
@@ -870,6 +871,9 @@ async function handleRefreshToken() {
           // 直接更新store中的账号数据，确保立即同步
           await accountsStore.updateAccount(updatedAccount);
           emit('update', updatedAccount);
+          // 上报到 Supabase 云端
+          supabaseService.syncAccountToCloud(updatedAccount).catch(() => {});
+          supabaseService.recordRefreshToCloud(props.account.email, true, updatedAccount.plan_name).catch(() => {});
         } catch (error) {
           console.error('获取账号信息失败:', error);
           // 如果无法获取最新账号信息，使用现有数据更新
@@ -885,6 +889,8 @@ async function handleRefreshToken() {
           }
           await accountsStore.updateAccount(updatedAccount);
           emit('update', updatedAccount);
+          // 上报到 Supabase 云端
+          supabaseService.syncAccountToCloud(updatedAccount).catch(() => {});
         }
       } else {
         ElMessage.error('Token刷新失败');
@@ -1044,6 +1050,9 @@ async function handleLogin() {
         // 更新 store 中的账号数据
         await accountsStore.updateAccount(updatedAccount);
         emit('update', updatedAccount);
+        // 上报到 Supabase 云端
+        supabaseService.syncAccountToCloud(updatedAccount).catch(() => {});
+        supabaseService.recordLoginToCloud(props.account.email, true, updatedAccount.plan_name).catch(() => {});
       } catch (error) {
         console.error('获取账号信息失败:', error);
         // 如果获取失败，使用基本更新
@@ -1058,12 +1067,18 @@ async function handleLogin() {
         if (result.total_quota !== undefined) updatedAccount.total_quota = result.total_quota;
         if (result.subscription_expires_at) updatedAccount.subscription_expires_at = result.subscription_expires_at;
         emit('update', updatedAccount);
+        // 上报到 Supabase 云端
+        supabaseService.syncAccountToCloud(updatedAccount).catch(() => {});
+        supabaseService.recordLoginToCloud(props.account.email, true, updatedAccount.plan_name).catch(() => {});
       }
     } else {
       ElMessage.error('登录失败');
+      // 登录失败也记录
+      supabaseService.recordLoginToCloud(props.account.email, false, undefined, '登录失败').catch(() => {});
     }
   } catch (error) {
     ElMessage.error(`登录失败: ${error}`);
+    supabaseService.recordLoginToCloud(props.account.email, false, undefined, String(error)).catch(() => {});
   }
 }
 

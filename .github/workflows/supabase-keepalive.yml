@@ -1,0 +1,32 @@
+name: Supabase 保活
+
+# 每天UTC 00:00（北京时间8:00）自动运行一次
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 也支持手动触发
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase 防止项目暂停
+        run: |
+          # 向 operation_logs 表写入一条心跳记录
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://omqgvexendjycxzhyrii.supabase.co/rest/v1/operation_logs" \
+            -X POST \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{\"action\":\"github_keepalive\",\"target_email\":\"system\",\"detail\":{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"source\":\"github_actions\"}}")
+          
+          echo "Supabase 保活请求状态码: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ 保活成功"
+          else
+            echo "❌ 保活失败，状态码: $HTTP_CODE"
+            exit 1
+          fi

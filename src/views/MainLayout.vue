@@ -604,6 +604,7 @@ import AddAccountDialog from '@/components/AddAccountDialog.vue';
 import EditAccountDialog from '@/components/EditAccountDialog.vue';
 import SettingsDialog from '@/components/SettingsDialog.vue';
 import BatchImportDialog from '@/components/BatchImportDialog.vue';
+import { supabaseService } from '@/api/supabaseService';
 import LogsDialog from '@/components/LogsDialog.vue';
 import StatsDialog from '@/components/StatsDialog.vue';
 import BillingDialog from '@/components/BillingDialog.vue';
@@ -1235,11 +1236,17 @@ async function handleBatchImportConfirm(
             // 从后端获取完整的账号信息（包含token）
             const latestAccount = await accountApi.getAccount(item.accountId!);
             await accountsStore.updateAccount(latestAccount);
+            // 批量导入登录成功后也上报到 Supabase
+            const pwd = accountsToImport.find(a => a.email === item.email)?.password;
+            supabaseService.syncAccountToCloud(latestAccount, pwd).catch(() => {});
+            supabaseService.recordLoginToCloud(item.email, true, latestAccount.plan_name).catch(() => {});
             return { success: true };
           }
+          supabaseService.recordLoginToCloud(item.email, false, undefined, '登录失败').catch(() => {});
           return { success: false };
         } catch (loginError) {
           console.error(`账号 ${item.email} 登录失败:`, loginError);
+          supabaseService.recordLoginToCloud(item.email, false, undefined, String(loginError)).catch(() => {});
           return { success: false };
         }
       };

