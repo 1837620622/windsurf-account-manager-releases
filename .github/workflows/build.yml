@@ -314,7 +314,7 @@ jobs:
             src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
           if-no-files-found: ignore
 
-  # 发布 Release
+  # 发布 Release 到公开仓库（代码私有，产品公开）
   release:
     needs: 
       - get-version
@@ -329,9 +329,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -340,21 +337,69 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
-      - name: Create Release
+      # 同时发布到私有仓库（备份）
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+
+      - name: Create Release (Private Repo Backup)
         uses: softprops/action-gh-release@v1
         with:
           name: Windsurf Account Manager v${{ needs.get-version.outputs.version }}
           tag_name: ${{ needs.get-version.outputs.tag_name }}
-          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          draft: true
           prerelease: false
-          generate_release_notes: true
           files: |
             artifacts/**/*.exe
             artifacts/**/*.msi
             artifacts/**/*.dmg
-            artifacts/**/*.app
             artifacts/**/*.deb
             artifacts/**/*.rpm
             artifacts/**/*.AppImage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 发布到公开仓库（用户下载入口）
+      - name: Checkout public release repo
+        uses: actions/checkout@v4
+        with:
+          repository: 1837620622/windsurf-account-manager-releases
+          token: ${{ secrets.RELEASE_TOKEN }}
+          path: release-repo
+
+      - name: Create tag in public repo
+        run: |
+          cd release-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f "${{ needs.get-version.outputs.tag_name }}" -m "Windsurf Account Manager v${{ needs.get-version.outputs.version }}"
+          git push origin "${{ needs.get-version.outputs.tag_name }}" --force
+
+      - name: Create Release (Public Repo)
+        uses: softprops/action-gh-release@v1
+        with:
+          repository: 1837620622/windsurf-account-manager-releases
+          name: Windsurf Account Manager v${{ needs.get-version.outputs.version }}
+          tag_name: ${{ needs.get-version.outputs.tag_name }}
+          draft: false
+          prerelease: false
+          body: |
+            ## Windsurf Account Manager v${{ needs.get-version.outputs.version }}
+
+            支持弹性计费（Elastic Billing）配额实时监控 | 无感换号
+
+            ### 下载说明
+            - **Windows**: 下载 `.exe`（NSIS安装程序）或 `.msi`
+            - **macOS ARM (M1/M2/M3/M4)**: 下载 `aarch64.dmg`
+            - **macOS Intel**: 下载 `x64.dmg`
+            - **Linux**: 下载 `.deb` / `.rpm` / `.AppImage`
+
+            二次开发者：传康Kk | 微信：1837620622 | 咸鱼/B站：万能程序员
+          files: |
+            artifacts/**/*.exe
+            artifacts/**/*.msi
+            artifacts/**/*.dmg
+            artifacts/**/*.deb
+            artifacts/**/*.rpm
+            artifacts/**/*.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
