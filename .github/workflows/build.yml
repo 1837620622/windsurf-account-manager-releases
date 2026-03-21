@@ -358,48 +358,46 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 发布到公开仓库（用户下载入口）
-      - name: Checkout public release repo
-        uses: actions/checkout@v4
-        with:
-          repository: 1837620622/windsurf-account-manager-releases
-          token: ${{ secrets.RELEASE_TOKEN }}
-          path: release-repo
-
-      - name: Create tag in public repo
+      # 发布到公开仓库（用gh CLI直接上传，避免softprops跨仓库bug）
+      - name: Collect release files
         run: |
-          cd release-repo
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -f "${{ needs.get-version.outputs.tag_name }}" -m "Windsurf Account Manager v${{ needs.get-version.outputs.version }}"
-          git push origin "${{ needs.get-version.outputs.tag_name }}" --force
+          mkdir -p release-files
+          find artifacts -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.dmg" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) -exec cp {} release-files/ \;
+          echo "=== 待上传文件 ==="
+          ls -lh release-files/
 
-      - name: Create Release (Public Repo)
-        uses: softprops/action-gh-release@v1
-        with:
-          repository: 1837620622/windsurf-account-manager-releases
-          name: Windsurf Account Manager v${{ needs.get-version.outputs.version }}
-          tag_name: ${{ needs.get-version.outputs.tag_name }}
-          draft: false
-          prerelease: false
-          body: |
-            ## Windsurf Account Manager v${{ needs.get-version.outputs.version }}
-
-            支持弹性计费（Elastic Billing）配额实时监控 | 无感换号
-
-            ### 下载说明
-            - **Windows**: 下载 `.exe`（NSIS安装程序）或 `.msi`
-            - **macOS ARM (M1/M2/M3/M4)**: 下载 `aarch64.dmg`
-            - **macOS Intel**: 下载 `x64.dmg`
-            - **Linux**: 下载 `.deb` / `.rpm` / `.AppImage`
-
-            二次开发者：传康Kk | 微信：1837620622 | 咸鱼/B站：万能程序员
-          files: |
-            artifacts/**/*.exe
-            artifacts/**/*.msi
-            artifacts/**/*.dmg
-            artifacts/**/*.deb
-            artifacts/**/*.rpm
-            artifacts/**/*.AppImage
+      - name: Create Release in Public Repo via gh CLI
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          VERSION="${{ needs.get-version.outputs.version }}"
+          TAG="${{ needs.get-version.outputs.tag_name }}"
+          REPO="1837620622/windsurf-account-manager-releases"
+          
+          BODY="## Windsurf Account Manager v${VERSION}
+
+          支持弹性计费（Elastic Billing）配额实时监控 | 无感换号
+
+          ### 下载说明
+          - **Windows**: 下载 \`.exe\`（NSIS安装程序）或 \`.msi\`
+          - **macOS ARM (M1/M2/M3/M4)**: 下载 \`aarch64.dmg\`
+          - **macOS Intel**: 下载 \`x64.dmg\`
+          - **Linux**: 下载 \`.deb\` / \`.rpm\` / \`.AppImage\`
+
+          二次开发者：传康Kk | 微信：1837620622 | 咸鱼/B站：万能程序员"
+          
+          # 删除旧Release（如果存在）
+          gh release delete "$TAG" --repo "$REPO" --yes 2>/dev/null || true
+          
+          # 确保tag存在（先删后建）
+          gh api -X DELETE "repos/$REPO/git/refs/tags/$TAG" 2>/dev/null || true
+          # 获取公开仓库最新commit sha
+          SHA=$(gh api "repos/$REPO/git/refs/heads/main" --jq '.object.sha')
+          gh api "repos/$REPO/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA" 2>/dev/null || true
+          
+          # 创建Release并上传所有文件
+          gh release create "$TAG" release-files/* \
+            --repo "$REPO" \
+            --title "Windsurf Account Manager v${VERSION}" \
+            --notes "$BODY" \
+            --latest

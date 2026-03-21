@@ -11,6 +11,7 @@ import type { Account } from '@/types';
 // 需要替换为你自己的 Supabase 项目信息
 // ============================================================
 const SUPABASE_URL = 'https://omqgvexendjycxzhyrii.supabase.co';
+// JWT有效期：2026-03-21 ~ 2036-03-21（10年），过期后需到Supabase Dashboard重新生成
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tcWd2ZXhlbmRqeWN4emh5cmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTUxNjksImV4cCI6MjA4OTY3MTE2OX0.H_NgiwZoRuAYMOUftsNIqSemoipA__AfMZ1j7xd_eBk';
 
 // ============================================================
