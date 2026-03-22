@@ -50,9 +50,45 @@
 
 <img src="https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png" alt="line" />
 
+## 前置要求
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  [!] 重要：使用本工具前，请确保以下环境已就绪                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. VPN / 代理环境（必须）                                      │
+│     本工具需要访问 Windsurf 海外服务器进行账号登录和信息获取     │
+│     请确保已开启 VPN 或全局代理，否则登录和刷新操作将会失败     │
+│     推荐使用：Clash / V2Ray / Surge / 机场订阅                  │
+│                                                                 │
+│  2. Windsurf 编辑器（已安装）                                   │
+│     无感切号功能需要检测 Windsurf 安装路径                      │
+│     macOS 默认路径: /Applications/Windsurf.app                  │
+│     Windows 默认路径: C:\Users\用户名\AppData\Local\Windsurf    │
+│                                                                 │
+│  3. Windsurf 账号（至少 1 个）                                  │
+│     需要有效的 Windsurf 邮箱 + 密码 或 Refresh Token            │
+│     建议准备 2 个以上账号以发挥无感切号功能                     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+<img src="https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png" alt="line" />
+
 ## 快速上手
 
-> **操作流程：开启无感切号 → 导入账号 → 自动切换，全程 3 步**
+> **操作流程：开启 VPN → 开启无感切号 → 导入账号 → 自动切换，全程 3 步**
+
+<br/>
+
+### `STEP 00` — 确认 VPN 已开启
+
+```
+请先确认 VPN / 代理已开启并处于连接状态
+未开启 VPN 时，登录和刷新操作将全部失败（无法连接 Windsurf 服务器）
+建议使用全局模式或规则模式（放行 *.codeium.com / *.windsurf.com）
+```
 
 <br/>
 
@@ -78,17 +114,36 @@
 
 点击顶部 **添加账号** 或 **批量导入** 按钮
 
-**单个添加** — 输入邮箱和密码，点击确定
-
-**批量导入（推荐）** — 每行一个账号，格式如下：
+**方式一：单个添加**
 
 ```
-user1@example.com password123 主力号
-user2@example.com password456 备用号
-user3@example.com password789
+1. 点击顶部栏的 [+] 按钮
+2. 选择「邮箱密码」模式
+3. 输入 Windsurf 邮箱和密码
+4. 可选填备注名称、分组、标签
+5. 点击【确定】，会自动登录并获取账号信息
 ```
 
-> 勾选「导入后自动登录」，自动获取所有账号的套餐和配额信息
+**方式二：批量导入（推荐，适合多账号）**
+
+```
+1. 点击顶部栏的 [批量导入] 按钮
+2. 选择「邮箱密码」模式
+3. 在文本框中粘贴账号列表，每行一个，格式：
+
+   邮箱 密码 备注(可选)
+
+   示例：
+   user1@example.com password123 主力号
+   user2@example.com password456 备用号
+   user3@example.com password789
+
+4. 勾选「导入后自动登录」
+5. 选择分组和标签（可选）
+6. 点击【导入】
+```
+
+> 也支持 Refresh Token 模式导入，适用于无密码但有 Token 的场景
 
 <br/>
 
@@ -96,9 +151,25 @@ user3@example.com password789
 
 ```
 账号导入成功后：
-  → 每张卡片显示套餐类型 / 配额用量 / 到期时间
-  → 配额用尽 → 自动切换下一个账号 → Windsurf 自动重启
-  → 无缝继续工作，全程无需手动干预
+
+  → 每张卡片实时显示：
+      套餐类型（Free / Pro / Teams / Enterprise）
+      配额用量（已用 / 总量）
+      弹性计费剩余百分比（Daily Remaining / Weekly Remaining）
+      订阅到期时间
+      账号状态（正常 / 已禁用）
+
+  → 无感切号工作流程：
+      当前账号配额耗尽
+      → 软件自动检测到配额不足
+      → 自动切换到下一个配额充足的账号
+      → Windsurf 自动重启并加载新账号
+      → 无缝继续编码工作
+
+  → 手动操作：
+      点击 [刷新] 按钮可手动更新所有账号信息
+      点击账号卡片上的 [登录] 可手动切换到指定账号
+      支持拖拽排序，调整账号优先级
 ```
 
 <img src="https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png" alt="line" />
@@ -127,19 +198,32 @@ user3@example.com password789
 
 > 不确定架构？点击左上角苹果图标 → **关于本机**，查看芯片信息
 
-#### macOS 首次打开提示「已损坏」的解决方法
+#### macOS 启动说明（重要，必读）
 
-macOS 对未签名应用会拦截，按以下步骤操作：
+macOS 对未签名应用会拦截，提示「已损坏，无法打开」。需要通过终端启动：
 
 ```bash
-# 第一步：移除隔离属性
+# 第一步：安装后，先移除系统隔离属性（只需执行一次）
 sudo xattr -rd com.apple.quarantine /Applications/windsurf-account-manager.app
+```
 
-# 第二步：直接运行（首次需要通过终端启动一次）
+```bash
+# 第二步：每次启动都使用此命令（必须用 sudo）
 sudo /Applications/windsurf-account-manager.app/Contents/MacOS/windsurf-account-manager
 ```
 
-> 执行后会弹出应用窗口，之后即可正常从启动台打开，无需再执行命令
+```
+注意事项：
+  - 每次启动都需要通过终端执行上面的 sudo 命令
+  - 不能直接双击 .app 或从启动台打开（会提示已损坏）
+  - 建议将启动命令保存为终端别名，方便快速启动：
+
+    # 在 ~/.zshrc 或 ~/.bashrc 中添加：
+    alias wam='sudo /Applications/windsurf-account-manager.app/Contents/MacOS/windsurf-account-manager'
+
+    # 之后只需在终端输入：
+    wam
+```
 
 ### Linux
 
