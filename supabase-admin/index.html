@@ -94,8 +94,10 @@
             <el-option label="error" value="error" />
           </el-select>
           <el-button type="primary" @click="loadAccounts" :loading="loadingAccounts">刷新</el-button>
+          <el-button type="info" plain @click="loadAllAccounts" :loading="loadingAll">加载全部</el-button>
           <el-button type="success" @click="exportTXT">导出TXT</el-button>
           <el-button type="warning" @click="exportJSON">导出JSON</el-button>
+          <span v-if="accountTotal > accounts.length" style="color:#909399; font-size:12px; margin-left:8px;">显示 {{ accounts.length }} / 共 {{ accountTotal }}</span>
         </div>
 
         <div style="overflow-x:auto; max-height:600px; overflow-y:auto;">
@@ -412,15 +414,54 @@ const app = createApp({
       ];
     });
 
+    const accountTotal = ref(0);
+    const loadingAll = ref(false);
+    const ACCOUNT_FIELDS = 'id,email,password,plan_type,status,used_quota,total_quota,daily_quota_remaining_percent,weekly_quota_remaining_percent,subscription_expires_at,last_login_at,updated_at,is_disabled';
+
     async function loadAccounts() {
       loadingAccounts.value = true;
       try {
-        const result = await supaFetch('windsurf_accounts', { select: 'id,email,password,plan_type,status,used_quota,total_quota,daily_quota_remaining_percent,weekly_quota_remaining_percent,subscription_expires_at,last_login_at,updated_at,is_disabled', order: 'updated_at.desc' }, 10000);
+        const result = await supaFetch('windsurf_accounts', { select: ACCOUNT_FIELDS, order: 'updated_at.desc' }, 1000);
         accounts.value = deduplicateAccounts(result.data).map(a => ({ ...a, _showPwd: false }));
+        accountTotal.value = result.total;
         connected.value = true;
-        ElMessage.success(`加载 ${accounts.value.length} 个账号（总计 ${result.total}）`);
+        ElMessage.success(`加载 ${accounts.value.length} 个账号（共 ${result.total}）`);
       } catch (e) { ElMessage.error('加载失败: ' + e.message); connected.value = false; }
       finally { loadingAccounts.value = false; }
+    }
+
+    async function loadAllAccounts() {
+      loadingAll.value = true;
+      try {
+        const PAGE = 1000;
+        let all = [];
+        let offset = 0;
+        while (true) {
+          const url = new URL(`${SUPABASE_URL}/rest/v1/windsurf_accounts`);
+          url.searchParams.set('select', ACCOUNT_FIELDS);
+          url.searchParams.set('order', 'updated_at.desc');
+          const res = await fetch(url, {
+            headers: {
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+              'Range': `${offset}-${offset + PAGE - 1}`,
+              'Prefer': 'count=exact'
+            }
+          });
+          if (!res.ok && res.status !== 206) throw new Error(`${res.status}`);
+          const batch = await res.json();
+          all = all.concat(batch);
+          if (!accountTotal.value) {
+            const t = res.headers.get('content-range')?.split('/')?.pop();
+            if (t) accountTotal.value = Number(t);
+          }
+          if (batch.length < PAGE) break;
+          offset += PAGE;
+        }
+        accounts.value = deduplicateAccounts(all).map(a => ({ ...a, _showPwd: false }));
+        ElMessage.success(`已加载全部 ${accounts.value.length} 个账号`);
+      } catch (e) { ElMessage.error('加载全部失败: ' + e.message); }
+      finally { loadingAll.value = false; }
     }
 
     async function loadLoginRecords() {
@@ -512,7 +553,8 @@ const app = createApp({
       loadingAccounts, loadingRecords, loadingLogs,
       searchText, filterPlan, filterStatus, recordSearch, recordAction, recordSuccess,
       planTypes, filteredAccounts, filteredRecords, planDistribution, statCards,
-      loadAccounts, loadLoginRecords, loadOperationLogs, deleteAccount, confirmDelete,
+      loadAccounts, loadAllAccounts, loadLoginRecords, loadOperationLogs, deleteAccount, confirmDelete,
+      accountTotal, loadingAll,
       togglePassword, handleSort, exportTXT, exportJSON,
       formatDate, formatDateTime, timeAgo, planTagType, planColor, quotaColor,
     };
