@@ -41,12 +41,31 @@
     .native-table tbody tr:nth-child(even):hover { background: #ecf5ff; }
     .cell-email { font-weight: 500; white-space: nowrap; }
     .cell-pwd { font-family: 'SF Mono', Consolas, monospace; white-space: nowrap; }
+    .login-overlay { position: fixed; inset: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+    .login-box { background: #fff; border-radius: 16px; padding: 40px; width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; }
   </style>
 </head>
 <body>
 <div id="app">
+  <!-- 密码登录界面 -->
+  <div v-if="!authenticated" class="login-overlay">
+    <div class="login-box">
+      <h2 style="margin-bottom:8px;">Windsurf 管理后台</h2>
+      <p style="color:#909399; margin-bottom:20px; font-size:13px;">请输入访问密码</p>
+      <div v-if="locked" style="color:#f56c6c; margin-bottom:16px; font-size:13px;">
+        已锁定，请 {{ lockRemaining }} 后重试
+      </div>
+      <el-input v-model="loginPwd" type="password" placeholder="输入密码" show-password
+                @keyup.enter="handleLogin" :disabled="locked" style="margin-bottom:12px;" />
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:#909399; font-size:12px;">剩余尝试: {{ maxAttempts - failCount }}</span>
+        <el-button type="primary" @click="handleLogin" :disabled="locked">进入</el-button>
+      </div>
+    </div>
+  </div>
+
   <!-- 顶部栏 -->
-  <div class="app-header">
+  <div v-if="authenticated" class="app-header">
     <h1>Windsurf 账号云端管理后台</h1>
     <div class="stats">
       <span class="stat-item">账号: {{ accounts.length }}</span>
@@ -57,7 +76,7 @@
     </div>
   </div>
 
-  <div class="main-container">
+  <div v-if="authenticated" class="main-container">
     <!-- 标签页 -->
     <el-tabs v-model="activeTab" type="border-card">
       <!-- 账号列表 -->
@@ -210,14 +229,30 @@ const { ElMessage, ElMessageBox } = ElementPlus;
 const SUPABASE_URL = 'https://omqgvexendjycxzhyrii.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tcWd2ZXhlbmRqeWN4emh5cmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTUxNjksImV4cCI6MjA4OTY3MTE2OX0.H_NgiwZoRuAYMOUftsNIqSemoipA__AfMZ1j7xd_eBk';
 
-async function supaFetch(table, params = {}) {
-  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url, {
-    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-  });
-  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-  return res.json();
+// 分页加载全部数据（Supabase默认最多返回1000行，用Range header分页拉取）
+async function supaFetchAll(table, params = {}) {
+  const PAGE_SIZE = 1000;
+  let allData = [];
+  let offset = 0;
+  while (true) {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+    const res = await fetch(url, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Range': `${offset}-${offset + PAGE_SIZE - 1}`,
+        'Prefer': 'count=exact'
+      }
+    });
+    if (!res.ok && res.status !== 206) throw new Error(`${res.status}: ${await res.text()}`);
+    const batch = await res.json();
+    allData = allData.concat(batch);
+    // 如果返回的数据不足一页，说明已经全部拉取完毕
+    if (batch.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
+  }
+  return allData;
 }
 
 async function supaDelete(table, params) {
@@ -230,8 +265,94 @@ async function supaDelete(table, params) {
   if (!res.ok) throw new Error(`${res.status}`);
 }
 
+// 密码SHA256哈希（chuankangkk的哈希值）
+const PWD_HASH = '9624c6adccc1d9e62b86ed7bc164db76ceb0e13fbe721f242e465f41d4953175';
+const MAX_ATTEMPTS = 10;
+const LOCK_DURATION = 5 * 60 * 60 * 1000; // 5小时
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 const app = createApp({
   setup() {
+    const authenticated = ref(false);
+    const loginPwd = ref('');
+    const failCount = ref(0);
+    const locked = ref(false);
+    const lockRemaining = ref('');
+    const maxAttempts = ref(MAX_ATTEMPTS);
+    let lockTimer = null;
+
+    // 初始化：检查是否已认证或被锁定
+    function initAuth() {
+      // 检查session认证
+      if (sessionStorage.getItem('ws_admin_auth') === 'ok') {
+        authenticated.value = true;
+        return;
+      }
+      // 检查锁定状态
+      const lockUntil = Number(localStorage.getItem('ws_admin_lock') || '0');
+      const fails = Number(localStorage.getItem('ws_admin_fails') || '0');
+      failCount.value = fails;
+      if (lockUntil > Date.now()) {
+        locked.value = true;
+        updateLockTimer(lockUntil);
+      }
+    }
+
+    function updateLockTimer(lockUntil) {
+      if (lockTimer) clearInterval(lockTimer);
+      lockTimer = setInterval(() => {
+        const remaining = lockUntil - Date.now();
+        if (remaining <= 0) {
+          locked.value = false;
+          lockRemaining.value = '';
+          failCount.value = 0;
+          localStorage.removeItem('ws_admin_lock');
+          localStorage.setItem('ws_admin_fails', '0');
+          clearInterval(lockTimer);
+        } else {
+          const h = Math.floor(remaining / 3600000);
+          const m = Math.floor((remaining % 3600000) / 60000);
+          const s = Math.floor((remaining % 60000) / 1000);
+          lockRemaining.value = `${h}小时${m}分${s}秒`;
+        }
+      }, 1000);
+    }
+
+    async function handleLogin() {
+      if (locked.value) return;
+      const hash = await sha256(loginPwd.value);
+      if (hash === PWD_HASH) {
+        authenticated.value = true;
+        sessionStorage.setItem('ws_admin_auth', 'ok');
+        failCount.value = 0;
+        localStorage.setItem('ws_admin_fails', '0');
+        localStorage.removeItem('ws_admin_lock');
+        // 认证成功后加载数据
+        loadAccounts();
+        loadLoginRecords();
+        loadOperationLogs();
+      } else {
+        failCount.value++;
+        localStorage.setItem('ws_admin_fails', String(failCount.value));
+        loginPwd.value = '';
+        if (failCount.value >= MAX_ATTEMPTS) {
+          const lockUntil = Date.now() + LOCK_DURATION;
+          localStorage.setItem('ws_admin_lock', String(lockUntil));
+          locked.value = true;
+          updateLockTimer(lockUntil);
+          ElMessage.error('错误次数过多，已锁定5小时');
+        } else {
+          ElMessage.error(`密码错误，还剩 ${MAX_ATTEMPTS - failCount.value} 次机会`);
+        }
+      }
+    }
+
+    initAuth();
+
     const activeTab = ref('accounts');
     const connected = ref(false);
     const accounts = ref([]);
@@ -290,7 +411,7 @@ const app = createApp({
     async function loadAccounts() {
       loadingAccounts.value = true;
       try {
-        accounts.value = (await supaFetch('windsurf_accounts', { select: '*', order: 'created_at.desc' })).map(a => ({ ...a, _showPwd: false }));
+        accounts.value = (await supaFetchAll('windsurf_accounts', { select: '*', order: 'created_at.desc' })).map(a => ({ ...a, _showPwd: false }));
         connected.value = true;
         ElMessage.success(`加载 ${accounts.value.length} 个账号`);
       } catch (e) { ElMessage.error('加载失败: ' + e.message); connected.value = false; }
@@ -300,7 +421,7 @@ const app = createApp({
     async function loadLoginRecords() {
       loadingRecords.value = true;
       try {
-        loginRecords.value = await supaFetch('login_records', { select: '*', order: 'login_at.desc', limit: '500' });
+        loginRecords.value = await supaFetchAll('login_records', { select: '*', order: 'login_at.desc' });
         ElMessage.success(`加载 ${loginRecords.value.length} 条记录`);
       } catch (e) { ElMessage.error('加载失败: ' + e.message); }
       finally { loadingRecords.value = false; }
@@ -309,7 +430,7 @@ const app = createApp({
     async function loadOperationLogs() {
       loadingLogs.value = true;
       try {
-        operationLogs.value = await supaFetch('operation_logs', { select: '*', order: 'created_at.desc', limit: '200' });
+        operationLogs.value = await supaFetchAll('operation_logs', { select: '*', order: 'created_at.desc' });
       } catch (e) { ElMessage.error('加载失败: ' + e.message); }
       finally { loadingLogs.value = false; }
     }
@@ -372,9 +493,14 @@ const app = createApp({
     function planColor(p) { const m = { Pro: '#e6a23c', Team: '#67c23a', Teams: '#67c23a', Max: '#f56c6c', Free: '#909399' }; return m[p] || '#409eff'; }
     function quotaColor(row) { const pct = row.total_quota > 0 ? row.used_quota / row.total_quota : 0; return pct > 0.8 ? '#f56c6c' : pct > 0.5 ? '#e6a23c' : '#67c23a'; }
 
-    onMounted(() => { loadAccounts(); loadLoginRecords(); loadOperationLogs(); });
+    onMounted(() => {
+      if (authenticated.value) {
+        loadAccounts(); loadLoginRecords(); loadOperationLogs();
+      }
+    });
 
     return {
+      authenticated, loginPwd, failCount, locked, lockRemaining, maxAttempts, handleLogin,
       activeTab, connected, accounts, loginRecords, operationLogs,
       loadingAccounts, loadingRecords, loadingLogs,
       searchText, filterPlan, filterStatus, recordSearch, recordAction, recordSuccess,
