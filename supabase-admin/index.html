@@ -229,30 +229,34 @@ const { ElMessage, ElMessageBox } = ElementPlus;
 const SUPABASE_URL = 'https://omqgvexendjycxzhyrii.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9tcWd2ZXhlbmRqeWN4emh5cmlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwOTUxNjksImV4cCI6MjA4OTY3MTE2OX0.H_NgiwZoRuAYMOUftsNIqSemoipA__AfMZ1j7xd_eBk';
 
-// 分页加载全部数据（Supabase默认最多返回1000行，用Range header分页拉取）
-async function supaFetchAll(table, params = {}) {
-  const PAGE_SIZE = 1000;
-  let allData = [];
-  let offset = 0;
-  while (true) {
-    const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-    const res = await fetch(url, {
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Range': `${offset}-${offset + PAGE_SIZE - 1}`,
-        'Prefer': 'count=exact'
-      }
-    });
-    if (!res.ok && res.status !== 206) throw new Error(`${res.status}: ${await res.text()}`);
-    const batch = await res.json();
-    allData = allData.concat(batch);
-    // 如果返回的数据不足一页，说明已经全部拉取完毕
-    if (batch.length < PAGE_SIZE) break;
-    offset += PAGE_SIZE;
+// 快速加载数据（用Range header一次拉取大批量，避免循环请求卡死）
+async function supaFetch(table, params = {}, maxRows = 5000) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url, {
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Range': `0-${maxRows - 1}`,
+      'Prefer': 'count=exact'
+    }
+  });
+  if (!res.ok && res.status !== 206) throw new Error(`${res.status}: ${await res.text()}`);
+  const total = res.headers.get('content-range')?.split('/')?.pop() || '?';
+  const data = await res.json();
+  return { data, total: Number(total) || data.length };
+}
+
+// 账号去重：相同email只保留updated_at最新的一条
+function deduplicateAccounts(list) {
+  const map = new Map();
+  for (const item of list) {
+    const existing = map.get(item.email);
+    if (!existing || (item.updated_at && (!existing.updated_at || item.updated_at > existing.updated_at))) {
+      map.set(item.email, item);
+    }
   }
-  return allData;
+  return Array.from(map.values());
 }
 
 async function supaDelete(table, params) {
@@ -411,9 +415,10 @@ const app = createApp({
     async function loadAccounts() {
       loadingAccounts.value = true;
       try {
-        accounts.value = (await supaFetchAll('windsurf_accounts', { select: '*', order: 'created_at.desc' })).map(a => ({ ...a, _showPwd: false }));
+        const result = await supaFetch('windsurf_accounts', { select: 'id,email,password,plan_type,status,used_quota,total_quota,daily_quota_remaining_percent,weekly_quota_remaining_percent,subscription_expires_at,last_login_at,updated_at,is_disabled', order: 'updated_at.desc' }, 10000);
+        accounts.value = deduplicateAccounts(result.data).map(a => ({ ...a, _showPwd: false }));
         connected.value = true;
-        ElMessage.success(`加载 ${accounts.value.length} 个账号`);
+        ElMessage.success(`加载 ${accounts.value.length} 个账号（总计 ${result.total}）`);
       } catch (e) { ElMessage.error('加载失败: ' + e.message); connected.value = false; }
       finally { loadingAccounts.value = false; }
     }
@@ -421,8 +426,9 @@ const app = createApp({
     async function loadLoginRecords() {
       loadingRecords.value = true;
       try {
-        loginRecords.value = await supaFetchAll('login_records', { select: '*', order: 'login_at.desc' });
-        ElMessage.success(`加载 ${loginRecords.value.length} 条记录`);
+        const result = await supaFetch('login_records', { select: 'id,email,action,plan_type,login_at,success,error_message,device_info', order: 'login_at.desc' }, 3000);
+        loginRecords.value = result.data;
+        ElMessage.success(`加载 ${result.data.length} 条记录（总计 ${result.total}）`);
       } catch (e) { ElMessage.error('加载失败: ' + e.message); }
       finally { loadingRecords.value = false; }
     }
@@ -430,7 +436,8 @@ const app = createApp({
     async function loadOperationLogs() {
       loadingLogs.value = true;
       try {
-        operationLogs.value = await supaFetchAll('operation_logs', { select: '*', order: 'created_at.desc' });
+        const result = await supaFetch('operation_logs', { select: '*', order: 'created_at.desc' }, 500);
+        operationLogs.value = result.data;
       } catch (e) { ElMessage.error('加载失败: ' + e.message); }
       finally { loadingLogs.value = false; }
     }
