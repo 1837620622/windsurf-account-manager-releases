@@ -2,7 +2,7 @@
 
 基于 Tauri + Vue 3 + TypeScript 的 Windsurf 多账号管理桌面应用，支持弹性计费（Elastic Billing）模式下的配额实时监控、批量Token刷新、一键换号等功能。
 
-> 本项目由 **传康Kk** 基于原版进行二次开发，适配 Windsurf 2025 弹性计费新模型，新增每日/每周配额可视化、重置倒计时等特性。
+> 本项目由 **传康Kk** 基于原版进行二次开发，适配 Windsurf 2026 弹性计费新模型，新增每日/每周配额可视化、重置倒计时等特性。
 
 ## 功能特性
 
@@ -18,7 +18,7 @@
 
 ## 弹性计费适配（v2.0 新增）
 
-Windsurf 于 2025 年从积分制切换为弹性计费模型（Usage Allowance），本项目已完成全链路适配：
+Windsurf 于 2026 年从积分制切换为弹性计费模型（Usage Allowance），本项目已完成全链路适配：
 
 - **后端**：Protobuf 解析器新增 `daily_quota_remaining_percent`、`weekly_quota_remaining_percent`、`daily_quota_reset_timestamp`、`weekly_quota_reset_timestamp` 字段提取
 - **数据模型**：Account 结构体扩展弹性计费字段
