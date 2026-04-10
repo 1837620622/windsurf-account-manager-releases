@@ -29,40 +29,61 @@ const disableContextMenu = (e: MouseEvent) => {
   return false;
 };
 
-// 禁用调试快捷键
+// 禁用调试快捷键（兼容 Windows Ctrl 和 macOS Cmd）
 const disableDebugKeys = (e: KeyboardEvent) => {
+  // 统一判断修饰键：Windows 用 Ctrl，macOS 用 Cmd（metaKey）
+  const modKey = e.ctrlKey || e.metaKey;
+  
   // 禁用F12
   if (e.key === 'F12') {
     e.preventDefault();
     return false;
   }
   
-  // 禁用Ctrl+Shift+I (开发者工具)
-  if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+  // 禁用 Ctrl/Cmd+Shift+I (开发者工具)
+  if (modKey && e.shiftKey && e.key === 'I') {
     e.preventDefault();
     return false;
   }
   
-  // 禁用Ctrl+Shift+J (控制台)
-  if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+  // 禁用 Ctrl/Cmd+Shift+J (控制台)
+  if (modKey && e.shiftKey && e.key === 'J') {
     e.preventDefault();
     return false;
   }
   
-  // 禁用Ctrl+Shift+C (审查元素)
-  if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+  // 禁用 Ctrl/Cmd+Shift+C (审查元素)
+  if (modKey && e.shiftKey && e.key === 'C') {
     e.preventDefault();
     return false;
   }
   
-  // 禁用Ctrl+U (查看源代码)
-  if (e.ctrlKey && e.key === 'u') {
+  // 禁用 Ctrl/Cmd+U (查看源代码)
+  if (modKey && e.key === 'u') {
     e.preventDefault();
     return false;
   }
   
-  // 禁用Ctrl+S (保存页面)
-  if (e.ctrlKey && e.key === 's') {
+  // 禁用 Ctrl/Cmd+S (保存页面)
+  if (modKey && e.key === 's') {
+    e.preventDefault();
+    return false;
+  }
+
+  // 禁用 Cmd+Option+I (macOS 开发者工具)
+  if (e.metaKey && e.altKey && e.key === 'i') {
+    e.preventDefault();
+    return false;
+  }
+
+  // 禁用 Cmd+Option+J (macOS 控制台)
+  if (e.metaKey && e.altKey && e.key === 'j') {
+    e.preventDefault();
+    return false;
+  }
+
+  // 禁用 Cmd+Option+C (macOS 审查元素)
+  if (e.metaKey && e.altKey && e.key === 'c') {
     e.preventDefault();
     return false;
   }
@@ -127,6 +148,19 @@ onMounted(async () => {
   
   // 禁用调试快捷键
   document.addEventListener('keydown', disableDebugKeys);
+
+  // 禁用拖拽（防止拖拽泄露页面信息）
+  document.addEventListener('dragstart', (e) => { e.preventDefault(); });
+  document.addEventListener('drop', (e) => { e.preventDefault(); });
+
+  // 禁用文本选择（防止通过选择文本审查 DOM）
+  document.addEventListener('selectstart', (e) => {
+    // 允许输入框内选择，禁止其他区域选择
+    const target = e.target as HTMLElement;
+    if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+    }
+  });
   
   // 获取并设置应用标题（包含版本号）
   try {
