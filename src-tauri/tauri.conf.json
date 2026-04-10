@@ -19,7 +19,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://server.codeium.com https://windsurf.com https://api.windsurf.ai https://omqgvexendjycxzhyrii.supabase.co https://*.supabase.co; font-src 'self' data:"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://server.codeium.com https://windsurf.com https://api.windsurf.ai https://omqgvexendjycxzhyrii.supabase.co https://*.supabase.co https://api.github.com; font-src 'self' data:"
     }
   },
   "bundle": {

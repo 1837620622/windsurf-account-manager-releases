@@ -7,7 +7,10 @@ on:
       - 'v*'
 
 jobs:
-  publish-tauri:
+  # ============================================================
+  # 阶段一：各平台并行构建，上传产物
+  # ============================================================
+  build-tauri:
     permissions:
       contents: write
     strategy:
@@ -56,29 +59,71 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - uses: tauri-apps/tauri-action@v0
+      # 仅构建，不创建 Release（不传 tagName）
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          owner: 1837620622
-          repo: windsurf-account-manager-releases
-          tagName: v__VERSION__
-          releaseName: 'Windsurf Account Manager v__VERSION__'
-          releaseBody: |
-            ## Windsurf Account Manager (CK 二次开发版) v__VERSION__
+          args: ${{ matrix.args }}
+
+      # 收集构建产物并上传
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.name }}
+          path: |
+            src-tauri/target/**/release/bundle/**/*.dmg
+            src-tauri/target/**/release/bundle/**/*.exe
+            src-tauri/target/**/release/bundle/**/*.msi
+            src-tauri/target/**/release/bundle/**/*.deb
+            src-tauri/target/**/release/bundle/**/*.rpm
+            src-tauri/target/**/release/bundle/**/*.AppImage
+          if-no-files-found: error
+
+  # ============================================================
+  # 阶段二：汇总所有产物，发布到公仓
+  # ============================================================
+  publish-release:
+    needs: build-tauri
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find all-artifacts -type f | head -50
+
+      - name: Get version from tag
+        id: version
+        run: echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Create Release on public repo
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: 1837620622/windsurf-account-manager-releases
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: 'Windsurf Account Manager ${{ steps.version.outputs.tag }}'
+          body: |
+            ## Windsurf Account Manager (CK 二次开发版) ${{ steps.version.outputs.tag }}
 
             ### 更新内容
 
             - 新增欢迎门户页：启动软件后需输入访问口令 `cknb` 进入主界面
             - 修复新账号无法导入和登录的问题
             - macOS 兼容性优化
+            - 新增启动时自动检测更新功能
 
             ### 下载说明
 
             | 平台 | 文件 | 适用架构 |
             |------|------|----------|
             | Windows | `*_x64-setup.exe` | Intel/AMD x64 |
-            | Windows | `*_arm64-setup.exe` | ARM64 |
             | macOS | `*_aarch64.dmg` | Apple Silicon M1/M2/M3/M4 |
             | macOS | `*_x64.dmg` | Intel Mac |
             | Linux | `*_amd64.deb` | Ubuntu/Debian |
@@ -86,6 +131,8 @@ jobs:
 
             ---
             二次开发者：传康Kk | 微信：1837620622 | 咸鱼/B站：万能程序员
-          releaseDraft: false
+          files: all-artifacts/**/*
+          token: ${{ secrets.RELEASE_TOKEN }}
+          draft: false
           prerelease: false
-          args: ${{ matrix.args }}
+          make_latest: true

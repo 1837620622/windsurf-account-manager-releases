@@ -8,6 +8,7 @@ import GatePage from './components/GatePage.vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { supabaseService } from './api/supabaseService';
+import { checkForUpdate } from './api/updateChecker';
 
 const accountsStore = useAccountsStore();
 const settingsStore = useSettingsStore();
@@ -140,6 +141,16 @@ async function onGateAuthenticated() {
 
   // 显示主界面
   showMain.value = true;
+
+  // 延迟 2 秒后检测更新（不阻塞主界面加载）
+  setTimeout(async () => {
+    try {
+      const currentVersion = await invoke<string>('get_app_version');
+      checkForUpdate(currentVersion);
+    } catch (e) {
+      console.log('[更新检测] 获取版本号失败:', e);
+    }
+  }, 2000);
 }
 
 onMounted(async () => {

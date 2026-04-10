@@ -9,6 +9,29 @@ use commands::{AutoResetStore, ResetRecordStore};
 use std::sync::Arc;
 use tauri::Manager;
 
+/// 在 Windows Release 模式下弹出错误对话框（因为没有控制台窗口）
+fn show_fatal_error(msg: &str) {
+    #[cfg(target_os = "windows")]
+    {
+        use std::ffi::OsStr;
+        use std::os::windows::ffi::OsStrExt;
+        let wide_msg: Vec<u16> = OsStr::new(msg).encode_wide().chain(std::iter::once(0)).collect();
+        let wide_title: Vec<u16> = OsStr::new("启动失败 - Windsurf Account Manager").encode_wide().chain(std::iter::once(0)).collect();
+        unsafe {
+            winapi::um::winuser::MessageBoxW(
+                std::ptr::null_mut(),
+                wide_msg.as_ptr(),
+                wide_title.as_ptr(),
+                winapi::um::winuser::MB_ICONERROR,
+            );
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        eprintln!("[FATAL] {}", msg);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
@@ -17,23 +40,40 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // 初始化数据存储
-            let store = DataStore::new(app.handle())
-                .expect("Failed to initialize data store");
-            let store = Arc::new(store);
+            // 初始化数据存储（失败时弹出错误提示而非静默崩溃）
+            let store = match DataStore::new(app.handle()) {
+                Ok(s) => Arc::new(s),
+                Err(e) => {
+                    let msg = format!("数据存储初始化失败，请检查磁盘权限或重新安装。\n\n详细错误: {}", e);
+                    show_fatal_error(&msg);
+                    return Err(e.into());
+                }
+            };
             
             // 将数据存储注入到应用状态
             app.manage(store.clone());
             
             // 初始化自动重置配置存储
-            let auto_reset_store = AutoResetStore::new(app.handle())
-                .expect("Failed to initialize auto reset store");
-            app.manage(Arc::new(auto_reset_store));
+            let auto_reset_store = match AutoResetStore::new(app.handle()) {
+                Ok(s) => Arc::new(s),
+                Err(e) => {
+                    let msg = format!("自动重置配置初始化失败。\n\n详细错误: {}", e);
+                    show_fatal_error(&msg);
+                    return Err(e.into());
+                }
+            };
+            app.manage(auto_reset_store);
             
             // 初始化重置记录存储
-            let reset_record_store = ResetRecordStore::new(app.handle())
-                .expect("Failed to initialize reset record store");
-            app.manage(Arc::new(reset_record_store));
+            let reset_record_store = match ResetRecordStore::new(app.handle()) {
+                Ok(s) => Arc::new(s),
+                Err(e) => {
+                    let msg = format!("重置记录存储初始化失败。\n\n详细错误: {}", e);
+                    show_fatal_error(&msg);
+                    return Err(e.into());
+                }
+            };
+            app.manage(reset_record_store);
             
             // 初始化代理配置
             let store_for_proxy = store.clone();
