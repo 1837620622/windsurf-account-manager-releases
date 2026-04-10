@@ -3,7 +3,7 @@ use crate::utils::{AppError, AppResult};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Mutex};
 use uuid::Uuid;
 use tauri::{Manager, Emitter};
 use chrono::Local;
@@ -23,6 +23,8 @@ pub struct DataStore {
     pub logs: Arc<RwLock<Vec<OperationLog>>>,
     logs_path: PathBuf,
     app_handle: tauri::AppHandle,
+    /// 写入互斥锁，防止多个异步任务并发写入同一文件导致数据损坏
+    write_lock: Arc<Mutex<()>>,
 }
 
 impl DataStore {
@@ -58,6 +60,7 @@ impl DataStore {
             logs: Arc::new(RwLock::new(logs)),
             logs_path,
             app_handle: app_handle.clone(),
+            write_lock: Arc::new(Mutex::new(())),
         })
     }
 
@@ -68,14 +71,30 @@ impl DataStore {
                     match serde_json::from_str(&data) {
                         Ok(config) => Ok(config),
                         Err(e) => {
-                            // JSON 解析失败，尝试从备份恢复
-                            println!("[DataStore] Config file corrupted: {}, trying backup...", e);
+                            println!("[DataStore] Config file corrupted: {}", e);
+                            
+                            // 尝试修复 trailing characters 类型的损坏
+                            if let Some(repaired) = Self::try_repair_json(&data) {
+                                match serde_json::from_str::<AppConfig>(&repaired) {
+                                    Ok(config) => {
+                                        println!("[DataStore] JSON repair succeeded, saving repaired file");
+                                        // 保存修复后的文件
+                                        let _ = fs::write(path, &repaired);
+                                        return Ok(config);
+                                    }
+                                    Err(e2) => {
+                                        println!("[DataStore] JSON repair failed: {}", e2);
+                                    }
+                                }
+                            }
+                            
+                            // 修复失败，从备份恢复
+                            println!("[DataStore] Trying backup recovery...");
                             Self::recover_from_backup(path)
                         }
                     }
                 }
                 Err(e) => {
-                    // 文件读取失败，尝试从备份恢复
                     println!("[DataStore] Failed to read config: {}, trying backup...", e);
                     Self::recover_from_backup(path)
                 }
@@ -85,37 +104,122 @@ impl DataStore {
         }
     }
     
+    /// 尝试修复JSON文件中的 trailing characters 问题
+    /// 通过匹配大括号找到最外层JSON对象的结束位置，截断多余内容
+    fn try_repair_json(data: &str) -> Option<String> {
+        let mut depth = 0i32;
+        let mut in_string = false;
+        let mut escape_next = false;
+        let mut end_pos = None;
+        
+        for (i, ch) in data.char_indices() {
+            if escape_next {
+                escape_next = false;
+                continue;
+            }
+            
+            match ch {
+                '\\' if in_string => { escape_next = true; }
+                '"' => { in_string = !in_string; }
+                '{' if !in_string => {
+                    depth += 1;
+                }
+                '}' if !in_string => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end_pos = Some(i + 1);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        if let Some(pos) = end_pos {
+            let truncated = &data[..pos];
+            // 只有截断了内容才算修复
+            if truncated.len() < data.len() {
+                println!("[DataStore] Truncated {} trailing bytes", data.len() - truncated.len());
+                return Some(truncated.to_string());
+            }
+        }
+        
+        None
+    }
+    
     /// 从备份文件恢复配置
     fn recover_from_backup(path: &PathBuf) -> AppResult<AppConfig> {
         let backup_path = path.with_extension("json.backup");
         
         if backup_path.exists() {
             println!("[DataStore] Found backup file, attempting recovery...");
-            let data = fs::read_to_string(&backup_path)?;
-            let config: AppConfig = serde_json::from_str(&data)?;
-            
-            // 恢复成功后，将备份复制回主文件
-            fs::copy(&backup_path, path)?;
-            println!("[DataStore] Successfully recovered from backup!");
-            
-            Ok(config)
+            match fs::read_to_string(&backup_path) {
+                Ok(data) => {
+                    // 先直接解析
+                    if let Ok(config) = serde_json::from_str::<AppConfig>(&data) {
+                        fs::copy(&backup_path, path)?;
+                        println!("[DataStore] Successfully recovered from backup!");
+                        return Ok(config);
+                    }
+                    // 备份也损坏，尝试修复备份
+                    println!("[DataStore] Backup also corrupted, trying repair...");
+                    if let Some(repaired) = Self::try_repair_json(&data) {
+                        if let Ok(config) = serde_json::from_str::<AppConfig>(&repaired) {
+                            let _ = fs::write(path, &repaired);
+                            println!("[DataStore] Recovered from repaired backup!");
+                            return Ok(config);
+                        }
+                    }
+                    println!("[DataStore] Backup repair failed, using default config");
+                    // 备份损坏的主文件，避免数据丢失
+                    let corrupted_path = path.with_extension("json.corrupted");
+                    let _ = fs::rename(path, &corrupted_path);
+                    Ok(AppConfig::default())
+                }
+                Err(e) => {
+                    println!("[DataStore] Failed to read backup: {}, using default config", e);
+                    Ok(AppConfig::default())
+                }
+            }
         } else {
             println!("[DataStore] No backup found, using default config");
+            // 备份损坏的主文件，避免数据丢失
+            let corrupted_path = path.with_extension("json.corrupted");
+            let _ = fs::rename(path, &corrupted_path);
             Ok(AppConfig::default())
         }
     }
     
     fn load_logs(path: &PathBuf) -> AppResult<Vec<OperationLog>> {
         if path.exists() {
-            let data = fs::read_to_string(path)?;
-            let logs: Vec<OperationLog> = serde_json::from_str(&data)?;
-            Ok(logs)
+            match fs::read_to_string(path) {
+                Ok(data) => {
+                    match serde_json::from_str::<Vec<OperationLog>>(&data) {
+                        Ok(logs) => Ok(logs),
+                        Err(e) => {
+                            // 日志文件损坏不应阻止应用启动，直接重置
+                            println!("[DataStore] Logs file corrupted: {}, resetting logs", e);
+                            // 备份损坏的日志文件
+                            let backup = path.with_extension("json.corrupted");
+                            let _ = fs::rename(path, &backup);
+                            Ok(Vec::new())
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("[DataStore] Failed to read logs: {}, starting fresh", e);
+                    Ok(Vec::new())
+                }
+            }
         } else {
             Ok(Vec::new())
         }
     }
 
     pub async fn save(&self) -> AppResult<()> {
+        // 获取写入互斥锁，防止并发写入导致数据损坏
+        let _write_guard = self.write_lock.lock().await;
+        
         let config = self.config.read().await;
         let data = serde_json::to_string_pretty(&*config)?;
         let path = self.config_path.clone();
@@ -150,8 +254,13 @@ impl DataStore {
         let temp_path = parent.join(format!("{}.tmp.{}.{}", file_stem, pid, timestamp));
         let backup_path = path.with_extension("json.backup");
         
-        // 1. 先写入临时文件
-        fs::write(&temp_path, data)?;
+        // 1. 先写入临时文件并 fsync 确保落盘
+        {
+            use std::io::Write;
+            let mut file = fs::File::create(&temp_path)?;
+            file.write_all(data.as_bytes())?;
+            file.sync_all()?; // 强制刷入磁盘，防止断电/崩溃导致数据丢失
+        }
         
         // 2. 验证临时文件可以正常解析
         let verify_data = fs::read_to_string(&temp_path)?;
@@ -183,6 +292,9 @@ impl DataStore {
     }
     
     pub async fn save_logs(&self) -> AppResult<()> {
+        // 获取写入互斥锁，防止并发写入
+        let _write_guard = self.write_lock.lock().await;
+        
         let logs = self.logs.read().await;
         let data = serde_json::to_string_pretty(&*logs)?;
         let path = self.logs_path.clone();
@@ -190,7 +302,7 @@ impl DataStore {
         
         // 使用 spawn_blocking 将同步文件写入移到阻塞线程池，避免阻塞 tokio 运行时
         tokio::task::spawn_blocking(move || {
-            fs::write(&path, data)
+            Self::atomic_write(&path, &data)
         }).await
             .map_err(|e| AppError::Config(format!("Task join error: {}", e)))?
             .map_err(AppError::from)?;
