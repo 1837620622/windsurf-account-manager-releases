@@ -114,16 +114,20 @@ jobs:
 
             ### 更新内容
 
-            - 新增欢迎门户页：启动软件后需输入访问口令 `cknb` 进入主界面
-            - 修复新账号无法导入和登录的问题
-            - macOS 兼容性优化
+            - 修复账号多时JSON数据损坏(trailing characters)导致启动失败的问题
+            - 添加写入互斥锁防止并发写入文件竞态
+            - 增强数据文件损坏时的自动修复能力（智能截断+备份恢复）
+            - 修复自动更新检测功能（版本号解析错误）
+            - 门户页UI重构为赛博科技风格 + 修复6项前端问题
             - 新增启动时自动检测更新功能
+            - macOS/Windows/Linux 全平台兼容
 
             ### 下载说明
 
             | 平台 | 文件 | 适用架构 |
             |------|------|----------|
             | Windows | `*_x64-setup.exe` | Intel/AMD x64 |
+            | Windows | `*_x64_zh-CN.msi` | Intel/AMD x64 |
             | macOS | `*_aarch64.dmg` | Apple Silicon M1/M2/M3/M4 |
             | macOS | `*_x64.dmg` | Intel Mac |
             | Linux | `*_amd64.deb` | Ubuntu/Debian |

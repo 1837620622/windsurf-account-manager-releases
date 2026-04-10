@@ -145,8 +145,8 @@ async function onGateAuthenticated() {
   // 延迟 2 秒后检测更新（不阻塞主界面加载）
   setTimeout(async () => {
     try {
-      const currentVersion = await invoke<string>('get_app_version');
-      checkForUpdate(currentVersion);
+      const versionInfo = await invoke<{ version: string; name: string }>('get_app_version');
+      checkForUpdate(versionInfo.version);
     } catch (e) {
       console.log('[更新检测] 获取版本号失败:', e);
     }

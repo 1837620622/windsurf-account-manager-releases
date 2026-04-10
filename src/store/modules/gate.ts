@@ -33,7 +33,7 @@ export const useGateStore = defineStore('gate', () => {
       mode.value = 'normal';
       isAuthenticated.value = true;
       return true;
-    } else if (trimmed === 'ck666') {
+    } else if (trimmed === 'cknb666') {
       // 管理员模式 - 禁用数据采集
       mode.value = 'admin';
       isAuthenticated.value = true;
