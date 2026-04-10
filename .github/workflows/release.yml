@@ -58,17 +58,34 @@ jobs:
 
       - uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
+          owner: 1837620622
+          repo: windsurf-account-manager-releases
           tagName: v__VERSION__
           releaseName: 'Windsurf Account Manager v__VERSION__'
           releaseBody: |
-            Windsurf Account Manager (CK 二次开发版) v__VERSION__
+            ## Windsurf Account Manager (CK 二次开发版) v__VERSION__
 
-            支持弹性计费（Elastic Billing）配额实时监控
+            ### 更新内容
 
-            二次开发者：传康Kk
-            微信：1837620622 | 咸鱼/B站：万能程序员
-          releaseDraft: true
+            - 新增欢迎门户页：启动软件后需输入访问口令 `cknb` 进入主界面
+            - 修复新账号无法导入和登录的问题
+            - macOS 兼容性优化
+
+            ### 下载说明
+
+            | 平台 | 文件 | 适用架构 |
+            |------|------|----------|
+            | Windows | `*_x64-setup.exe` | Intel/AMD x64 |
+            | Windows | `*_arm64-setup.exe` | ARM64 |
+            | macOS | `*_aarch64.dmg` | Apple Silicon M1/M2/M3/M4 |
+            | macOS | `*_x64.dmg` | Intel Mac |
+            | Linux | `*_amd64.deb` | Ubuntu/Debian |
+            | Linux | `*_amd64.AppImage` | 通用 |
+
+            ---
+            二次开发者：传康Kk | 微信：1837620622 | 咸鱼/B站：万能程序员
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
