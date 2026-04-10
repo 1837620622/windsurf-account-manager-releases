@@ -4,7 +4,6 @@ import ElementPlus from 'element-plus';
 import 'element-plus/dist/index.css';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import { pinia } from './store';
-import { supabaseService } from './api/supabaseService';
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs';
 
 const app = createApp(App);
@@ -23,6 +22,3 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 app.use(pinia);
 
 app.mount("#app");
-
-// 启动 Supabase 保活（每24小时发一次心跳，防止项目被暂停）
-supabaseService.startKeepalive();

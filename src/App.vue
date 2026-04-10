@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed } from 'vue';
+import { onMounted, onUnmounted, computed, ref } from 'vue';
 import { ElConfigProvider } from 'element-plus';
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs';
-import { useAccountsStore, useSettingsStore, useUIStore } from './store';
+import { useAccountsStore, useSettingsStore, useUIStore, useGateStore } from './store';
 import MainLayout from './views/MainLayout.vue';
+import GatePage from './components/GatePage.vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { supabaseService } from './api/supabaseService';
 
 const accountsStore = useAccountsStore();
 const settingsStore = useSettingsStore();
 const uiStore = useUIStore();
+const gateStore = useGateStore();
+
+// 是否已通过门控（控制显示门户页 or 主界面）
+const showMain = ref(false);
 
 // 事件监听取消函数
 let tokenRefreshedUnlisten: UnlistenFn | null = null;
@@ -64,6 +70,57 @@ const disableDebugKeys = (e: KeyboardEvent) => {
   return true;
 };
 
+// ============================================================
+// 门控验证通过后：根据模式配置采集开关，初始化应用
+// ============================================================
+async function onGateAuthenticated() {
+  // 根据模式设置 Supabase 采集开关
+  const collectionEnabled = gateStore.isCollectionEnabled;
+  supabaseService.setEnabled(collectionEnabled);
+
+  // 启用采集时才启动保活
+  if (collectionEnabled) {
+    supabaseService.startKeepalive();
+  }
+
+  // 初始化应用数据
+  await Promise.all([
+    accountsStore.loadAccounts(),
+    settingsStore.initialize()
+  ]);
+
+  // 如果设置中有主题且与当前不同，则应用设置中的主题
+  const settingsTheme = settingsStore.settings.theme;
+  if (settingsTheme && settingsTheme !== uiStore.theme) {
+    uiStore.setTheme(settingsTheme as 'light' | 'dark');
+  } else {
+    uiStore.setTheme(uiStore.theme);
+  }
+
+  // 启动自动刷新Token功能
+  accountsStore.startAutoRefreshTimer(settingsStore);
+
+  // 监听后端 token 刷新事件，自动更新前端账户数据
+  tokenRefreshedUnlisten = await listen<{ account_id: string; token: string; token_expires_at: string }>('token-refreshed', (event) => {
+    const { account_id, token, token_expires_at } = event.payload;
+    console.log('[Token刷新事件] 后端已刷新账户 token:', account_id);
+    const idx = accountsStore.accounts.findIndex(acc => acc.id === account_id);
+    if (idx !== -1) {
+      const updatedAccount = { 
+        ...accountsStore.accounts[idx], 
+        token, 
+        token_expires_at, 
+        status: 'active' as const 
+      };
+      accountsStore.accounts.splice(idx, 1, updatedAccount);
+      console.log('[Token刷新事件] 已更新账户:', updatedAccount.email);
+    }
+  });
+
+  // 显示主界面
+  showMain.value = true;
+}
+
 onMounted(async () => {
   // 禁用右键菜单
   document.addEventListener('contextmenu', disableContextMenu);
@@ -78,43 +135,6 @@ onMounted(async () => {
   } catch (error) {
     console.error('Failed to get app title:', error);
   }
-  
-  // 初始化应用数据
-  await Promise.all([
-    accountsStore.loadAccounts(),
-    settingsStore.initialize()
-  ]);
-  
-  // 如果设置中有主题且与当前不同，则应用设置中的主题
-  const settingsTheme = settingsStore.settings.theme;
-  if (settingsTheme && settingsTheme !== uiStore.theme) {
-    uiStore.setTheme(settingsTheme as 'light' | 'dark');
-  } else {
-    // 确保当前主题被应用
-    uiStore.setTheme(uiStore.theme);
-  }
-  
-  // 启动自动刷新Token功能
-  accountsStore.startAutoRefreshTimer(settingsStore);
-  
-  // 监听后端 token 刷新事件，自动更新前端账户数据
-  tokenRefreshedUnlisten = await listen<{ account_id: string; token: string; token_expires_at: string }>('token-refreshed', (event) => {
-    const { account_id, token, token_expires_at } = event.payload;
-    console.log('[Token刷新事件] 后端已刷新账户 token:', account_id);
-    
-    // 更新对应账户的 token 和过期时间
-    const idx = accountsStore.accounts.findIndex(acc => acc.id === account_id);
-    if (idx !== -1) {
-      const updatedAccount = { 
-        ...accountsStore.accounts[idx], 
-        token, 
-        token_expires_at, 
-        status: 'active' as const 
-      };
-      accountsStore.accounts.splice(idx, 1, updatedAccount);
-      console.log('[Token刷新事件] 已更新账户:', updatedAccount.email);
-    }
-  });
 });
 
 // 组件卸载时停止定时器和移除事件监听
@@ -133,7 +153,10 @@ onUnmounted(() => {
 
 <template>
   <el-config-provider :locale="zhCn" :namespace="elNamespace">
-    <MainLayout />
+    <!-- 门控页面：未验证时显示 -->
+    <GatePage v-if="!showMain" @authenticated="onGateAuthenticated" />
+    <!-- 主界面：验证通过后显示 -->
+    <MainLayout v-else />
   </el-config-provider>
 </template>
 
