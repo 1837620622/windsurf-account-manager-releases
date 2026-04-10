@@ -90,6 +90,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -103,6 +107,28 @@ jobs:
         id: version
         run: echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
 
+      # 自动从 git log 生成更新日志（取上一个 tag 到当前 tag 之间的 commit）
+      - name: Generate changelog from commits
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # 找到上一个 tag（排除当前 tag）
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${TAG}$" | head -1)
+          
+          if [ -z "$PREV_TAG" ]; then
+            # 没有上一个 tag，取全部 commit
+            COMMITS=$(git log --pretty=format:"- %s" ${TAG} | head -30)
+          else
+            COMMITS=$(git log --pretty=format:"- %s" ${PREV_TAG}..${TAG} | head -30)
+          fi
+          
+          # 写入多行内容到 GITHUB_OUTPUT
+          {
+            echo "commits<<CHANGELOG_EOF"
+            echo "$COMMITS"
+            echo "CHANGELOG_EOF"
+          } >> $GITHUB_OUTPUT
+
       - name: Create Release on public repo
         uses: softprops/action-gh-release@v2
         with:
@@ -114,13 +140,7 @@ jobs:
 
             ### 更新内容
 
-            - 修复账号多时JSON数据损坏(trailing characters)导致启动失败的问题
-            - 添加写入互斥锁防止并发写入文件竞态
-            - 增强数据文件损坏时的自动修复能力（智能截断+备份恢复）
-            - 修复自动更新检测功能（版本号解析错误）
-            - 门户页UI重构为赛博科技风格 + 修复6项前端问题
-            - 新增启动时自动检测更新功能
-            - macOS/Windows/Linux 全平台兼容
+            ${{ steps.changelog.outputs.commits }}
 
             ### 下载说明
 
