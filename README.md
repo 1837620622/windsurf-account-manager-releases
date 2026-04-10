@@ -23,6 +23,18 @@
 
 <br/>
 
+<div align="center">
+
+### 🔔 最新动态
+
+> **截止 2026 年 4 月 9 日，切号功能一切正常。**
+>
+> 近期听闻社区反馈：部分新注册账号在其他工具中出现无法切号的情况。
+> 经本人实测，在本切号软件中，**新注册账号的切号功能完全正常**，不受该问题影响。
+> 如遇类似问题，欢迎使用本工具进行切换。
+
+</div>
+
 <img src="https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png" alt="line" />
 
 ## 界面预览
