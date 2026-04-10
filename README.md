@@ -19,6 +19,10 @@
 
 [`下载最新版本`](https://github.com/1837620622/windsurf-account-manager-releases/releases)
 
+<br/>
+
+<img src="images/homepage.png" width="92%" alt="homepage" />
+
 </div>
 
 <br/>
@@ -37,22 +41,26 @@
 
 <div align="center">
 
-### 🔐 v2.2.0 更新内容
+### v2.2.1 更新内容
 
 </div>
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  ✨ 新增欢迎门户页                                             │
-│     启动软件后需输入访问口令 cknb 进入主界面                    │
-│                                                                 │
-│  🔧 修复新账号无法登录                                          │
-│     解决部分新注册账号无法导入和登录的问题                      │
-│                                                                 │
-│  🍎 macOS 兼容性优化                                            │
-│     修复 macOS 下部分快捷键无响应的问题                         │
-└─────────────────────────────────────────────────────────────────┘
-```
+近期社区反馈的 Firebase Referer 403 错误（如下图），已在本版本中彻底修复：
+
+<div align="center">
+<img src="images/error-fixed.png" width="92%" alt="error-fixed" />
+<br/>
+<sub>上图错误已在 v2.2.1 中修复</sub>
+</div>
+
+<br/>
+
+- **修复数据损坏** — 修复账号多时 JSON 数据损坏（trailing characters）导致启动失败的问题
+- **并发写入保护** — 添加写入互斥锁，防止多任务并发写入文件导致数据竞态
+- **智能数据恢复** — 增强数据文件损坏时的自动修复能力（智能截断 + 备份恢复）
+- **修复更新检测** — 修复自动更新检测功能中版本号解析错误的问题
+- **门户页重构** — 赛博科技风格 UI + 修复 6 项前端问题
+- **全平台兼容** — macOS / Windows / Linux 全平台测试通过
 
 <img src="https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png" alt="line" />
 
@@ -68,42 +76,37 @@
 
 ## 核心功能
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  SEAMLESS SWITCH    配额耗尽 → 自动切换下一个账号 → 零操作      │
-│  ELASTIC BILLING    实时 Daily / Weekly 配额剩余百分比监控      │
-│  BATCH MANAGEMENT   批量导入 / 刷新 / 登录 / 导出              │
-│  TEAM CONTROL       团队成员管理 / 席位调整 / 积分重置          │
-│  PRIVACY MODE       一键隐藏邮箱地址                            │
-│  MULTI-PLATFORM     Windows / macOS / Linux × x64 / ARM64      │
-└─────────────────────────────────────────────────────────────────┘
-```
+| 功能 | 说明 |
+|---|---|
+| **SEAMLESS SWITCH** | 配额耗尽 → 自动切换下一个账号 → 零操作 |
+| **ELASTIC BILLING** | 实时 Daily / Weekly 配额剩余百分比监控 |
+| **BATCH MANAGEMENT** | 批量导入 / 刷新 / 登录 / 导出 |
+| **TEAM CONTROL** | 团队成员管理 / 席位调整 / 积分重置 |
+| **PRIVACY MODE** | 一键隐藏邮箱地址 |
+| **MULTI-PLATFORM** | Windows / macOS / Linux × x64 / ARM64 |
 
 <img src="https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png" alt="line" />
 
 ## 前置要求
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  [!] 重要：使用本工具前，请确保以下环境已就绪                   │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  1. VPN / 代理环境（必须）                                      │
-│     本工具需要访问 Windsurf 海外服务器进行账号登录和信息获取     │
-│     请确保已开启 VPN 或全局代理，否则登录和刷新操作将会失败     │
-│     推荐使用：Clash / V2Ray / Surge / 机场订阅                  │
-│                                                                 │
-│  2. Windsurf 编辑器（已安装）                                   │
-│     无感切号功能需要检测 Windsurf 安装路径                      │
-│     macOS 默认路径: /Applications/Windsurf.app                  │
-│     Windows 默认路径: C:\Users\用户名\AppData\Local\Windsurf    │
-│                                                                 │
-│  3. Windsurf 账号（至少 1 个）                                  │
-│     需要有效的 Windsurf 邮箱 + 密码 或 Refresh Token            │
-│     建议准备 2 个以上账号以发挥无感切号功能                     │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+> **重要：使用本工具前，请确保以下环境已就绪**
+
+**1. VPN / 代理环境（必须）**
+
+本工具需要访问 Windsurf 海外服务器进行账号登录和信息获取。请确保已开启 VPN 或全局代理，否则登录和刷新操作将会失败。推荐使用：Clash / V2Ray / Surge / 机场订阅。
+
+**2. Windsurf 编辑器（已安装）**
+
+无感切号功能需要检测 Windsurf 安装路径：
+
+| 系统 | 默认路径 |
+|---|---|
+| macOS | `/Applications/Windsurf.app` |
+| Windows | `C:\Users\用户名\AppData\Local\Windsurf` |
+
+**3. Windsurf 账号（至少 1 个）**
+
+需要有效的 Windsurf 邮箱 + 密码 或 Refresh Token。建议准备 2 个以上账号以发挥无感切号功能。
 
 <img src="https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png" alt="line" />
 
@@ -115,22 +118,9 @@
 
 ### `STEP 00` — 确认 VPN 已开启 & 输入口令进入
 
-```
-请先确认 VPN / 代理已开启并处于连接状态
+请先确认 VPN / 代理已开启并处于连接状态。
 
-启动软件后，会显示欢迎门户页面：
-  ┌─────────────────────────────┐
-  │  请输入以下口令进入软件      │
-  │                             │
-  │     ┌──┬──┬──┬──┐          │
-  │     │c │k │n │b │          │
-  │     └──┴──┴──┴──┘          │
-  │                             │
-  │  [ 在此输入口令 cknb ]      │
-  └─────────────────────────────┘
-
-在输入框中输入 cknb ，点击「进入」即可进入主界面
-```
+启动软件后，会显示欢迎门户页面。在输入框中输入 **`cknb`**，点击「验证」即可进入主界面。
 
 <br/>
 
@@ -293,22 +283,22 @@ chmod +x windsurf-account-manager_*.AppImage
 
 ## 技术栈
 
-```
-Frontend    Vue 3 + TypeScript + Element Plus + Pinia
-Backend     Rust (Tauri 2.x)
-Build       Vite + Cargo
-Platform    Windows / macOS / Linux (x64 + ARM64)
-```
+| 层级 | 技术 |
+|---|---|
+| Frontend | Vue 3 + TypeScript + Element Plus + Pinia |
+| Backend | Rust (Tauri 2.x) |
+| Build | Vite + Cargo |
+| Platform | Windows / macOS / Linux (x64 + ARM64) |
 
 <img src="https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png" alt="line" />
 
 ## 联系作者
 
-```
-微信        1837620622（传康Kk）
-邮箱        2040168455@qq.com
-咸鱼/B站    万能程序员
-```
+| 渠道 | 信息 |
+|---|---|
+| 微信 | 1837620622（传康Kk） |
+| 邮箱 | 2040168455@qq.com |
+| 咸鱼/B站 | 万能程序员 |
 
 <img src="https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png" alt="line" />
 
