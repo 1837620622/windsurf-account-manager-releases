@@ -142,6 +142,41 @@ async function onGateAuthenticated() {
   // 显示主界面
   showMain.value = true;
 
+  // 启动时自动检测并应用无感切号补丁（静默执行，不阻塞主界面）
+  setTimeout(async () => {
+    try {
+      // 获取 Windsurf 路径（优先用设置中的，否则自动检测）
+      let wsPath = settingsStore.settings.windsurfPath;
+      if (!wsPath) {
+        wsPath = await invoke<string>('get_windsurf_path');
+        if (wsPath) {
+          settingsStore.settings.windsurfPath = wsPath;
+          await settingsStore.updateSettings(settingsStore.settings);
+        }
+      }
+      if (wsPath) {
+        // 检查补丁是否已安装
+        const status = await invoke<any>('check_patch_status', { windsurfPath: wsPath });
+        if (!status.installed) {
+          // 未安装补丁，静默自动应用
+          console.log('[自动补丁] 检测到补丁未安装，自动应用中...');
+          const result = await invoke<any>('apply_seamless_patch', { windsurfPath: wsPath });
+          if (result.success) {
+            console.log('[自动补丁] 补丁应用成功');
+            settingsStore.settings.seamlessSwitchEnabled = true;
+            await settingsStore.updateSettings(settingsStore.settings);
+          } else {
+            console.warn('[自动补丁] 补丁应用失败:', result.message);
+          }
+        } else {
+          console.log('[自动补丁] 补丁已安装，跳过');
+        }
+      }
+    } catch (e) {
+      console.warn('[自动补丁] 自动注入失败:', e);
+    }
+  }, 1000);
+
   // 延迟 2 秒后检测更新（不阻塞主界面加载）
   setTimeout(async () => {
     try {

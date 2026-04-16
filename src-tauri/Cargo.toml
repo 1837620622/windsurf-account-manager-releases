@@ -1,6 +1,6 @@
 [package]
 name = "windsurf-account-manager"
-version = "2.2.2"
+version = "2.2.3"
 description = "A Tauri App"
 authors = ["ck"]
 edition = "2021"

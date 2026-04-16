@@ -122,10 +122,7 @@ function handleKeydown(e: KeyboardEvent) {
             @keydown="handleKeydown"
           />
           <button class="submit-btn" @click="handleSubmit">
-            <span class="btn-text">验证</span>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M5 12h14M12 5l7 7-7 7"/>
-            </svg>
+            <span class="btn-text">Enter ↵</span>
           </button>
         </div>
         
@@ -459,20 +456,21 @@ function handleKeydown(e: KeyboardEvent) {
 
 .submit-btn {
   height: 100%;
-  padding: 0 24px;
+  padding: 0 22px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  background: rgba(0, 255, 255, 0.1);
+  background: rgba(0, 255, 255, 0.12);
   border: 1px solid rgba(0, 255, 255, 0.4);
   border-radius: 22px;
   color: #0ff;
   cursor: pointer;
   transition: all 0.3s ease;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: bold;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
+  font-family: 'Courier New', Courier, monospace;
+  white-space: nowrap;
 }
 
 .submit-btn:hover {
