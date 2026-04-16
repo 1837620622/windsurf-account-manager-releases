@@ -63,136 +63,15 @@ async fn refresh_access_token(refresh_token: &str) -> AppResult<GoogleTokenRespo
     Ok(token_response)
 }
 
-/// 序列化Protobuf字符串（field 1, wire type 2）
-fn serialize_protobuf_string(value: &str) -> Vec<u8> {
-    if value.is_empty() {
-        return vec![];
-    }
-    
-    let value_bytes = value.as_bytes();
-    let value_length = value_bytes.len();
-    
-    // Field 1, wire type 2 (length-delimited): (1 << 3) | 2 = 0x0A
-    let mut result = vec![0x0A];
-    
-    // Encode length as varint
-    let mut length = value_length;
-    while length > 127 {
-        result.push((length as u8 & 0x7F) | 0x80);
-        length >>= 7;
-    }
-    result.push(length as u8 & 0x7F);
-    
-    // Append value bytes
-    result.extend_from_slice(value_bytes);
-    result
-}
-
-/// 反序列化Protobuf响应获取auth_token
-fn deserialize_protobuf_response(data: &[u8]) -> Option<String> {
-    if data.len() < 2 {
-        return None;
-    }
-    
-    let mut pos = 0;
-    while pos < data.len() {
-        // Read field tag
-        let tag = data[pos];
-        pos += 1;
-        
-        // Get wire type (low 3 bits)
-        let wire_type = tag & 0x07;
-        let field_number = tag >> 3;
-        
-        // If it's length-delimited type (wire_type = 2)
-        if wire_type == 2 {
-            // Read varint length
-            let mut length = 0;
-            let mut shift = 0;
-            while pos < data.len() {
-                let byte = data[pos];
-                pos += 1;
-                length |= ((byte & 0x7F) as usize) << shift;
-                if byte & 0x80 == 0 {
-                    break;
-                }
-                shift += 7;
-            }
-            
-            // Read string content
-            if pos + length <= data.len() {
-                if let Ok(value) = std::str::from_utf8(&data[pos..pos + length]) {
-                    // auth_token is typically field 1
-                    if field_number == 1 && !value.is_empty() {
-                        return Some(value.to_string());
-                    }
-                }
-                pos += length;
-            }
-        } else if wire_type == 0 {
-            // Skip varint field
-            while pos < data.len() {
-                if data[pos] & 0x80 == 0 {
-                    pos += 1;
-                    break;
-                }
-                pos += 1;
-            }
-        } else {
-            // Skip other types
-            break;
-        }
-    }
-    
-    None
-}
-
-/// 使用access_token获取auth_token
-async fn get_auth_token(access_token: &str) -> AppResult<String> {
-    let client = reqwest::Client::new();
-    
-    // Windsurf GetOneTimeAuthToken endpoint
-    let url = "https://web-backend.windsurf.com/exa.seat_management_pb.SeatManagementService/GetOneTimeAuthToken";
-    
-    // Serialize request as Protobuf
-    let request_data = serialize_protobuf_string(access_token);
-    
-    let response = client
-        .post(url)
-        .header("Content-Type", "application/proto")
-        .header("Accept", "application/proto")
-        .header("User-Agent", "Windsurf/1.4.2")
-        .body(request_data)
-        .send()
-        .await
-        .map_err(|e| AppError::Network(e.to_string()))?;
-    
-    if !response.status().is_success() {
-        let error_text = response.text().await.unwrap_or_default();
-        error!("Failed to get auth token: {}", error_text);
-        return Err(AppError::ApiRequest(format!("Failed to get auth token: {}", error_text)));
-    }
-    
-    // Deserialize response
-    let response_bytes = response.bytes().await
-        .map_err(|e| AppError::Network(e.to_string()))?;
-    
-    let auth_token = deserialize_protobuf_response(&response_bytes)
-        .ok_or_else(|| AppError::ApiRequest("Failed to parse auth token from response".to_string()))?;
-    
-    info!("Successfully obtained auth token");
-    Ok(auth_token)
-}
-
-/// 触发Windsurf回调URL以完成登录
-async fn trigger_windsurf_callback(auth_token: &str) -> AppResult<()> {
-    // 生成state参数
+/// 触发Windsurf回调URL以完成登录（传入 Firebase ID Token，与浏览器登录一致）
+async fn trigger_windsurf_callback(firebase_id_token: &str) -> AppResult<()> {
+    // 生成state参数（与浏览器登录流程一致）
     let state = Uuid::new_v4().to_string();
     
-    // 构建回调URL
-    // windsurf://codeium.windsurf#access_token=<auth_token>&state=<state>&token_type=Bearer
+    // 构建回调URL（与 Auth0 重定向格式完全一致）
+    // windsurf://codeium.windsurf#access_token=<firebase_id_token>&state=<state>&token_type=Bearer
     let params = [
-        ("access_token", auth_token),
+        ("access_token", firebase_id_token),
         ("state", &state),
         ("token_type", "Bearer"),
     ];
@@ -239,7 +118,7 @@ async fn trigger_windsurf_callback(auth_token: &str) -> AppResult<()> {
 }
 
 
-/// 一键切换账号命令（简化版：使用回调URL登录）
+/// 一键切换账号命令（使用Firebase ID Token + 回调URL登录，完全复刻浏览器登录流程）
 #[tauri::command]
 pub async fn switch_account(
     id: String,
@@ -265,59 +144,32 @@ pub async fn switch_account(
     
     let refresh_token = account.refresh_token.unwrap();
     
-    // Step 1: 检查本地token是否有效
-    let (access_token, expires_in) = if let (Some(token), Some(expires_at)) = (&account.token, &account.token_expires_at) {
-        // 检查token是否还有至少5分钟有效期
-        let now = Utc::now();
-        let buffer = chrono::Duration::minutes(5);
-        if *expires_at > now + buffer {
-            info!("Using cached access token, expires at: {}", expires_at);
-            let remaining_seconds = (*expires_at - now).num_seconds();
-            (token.clone(), remaining_seconds.to_string())
-        } else {
-            info!("Token expired or expiring soon, refreshing...");
-            let token_response = match refresh_access_token(&refresh_token).await {
-                Ok(resp) => resp,
-                Err(e) => {
-                    error!("Failed to refresh access token: {:?}", e);
-                    return Ok(json!({
-                        "success": false,
-                        "error": format!("获取access_token失败: {}", e)
-                    }));
-                }
-            };
-            (token_response.access_token, token_response.expires_in)
-        }
-    } else {
-        // 没有本地token，需要刷新
-        info!("No cached token, refreshing access token...");
-        let token_response = match refresh_access_token(&refresh_token).await {
-            Ok(resp) => resp,
-            Err(e) => {
-                error!("Failed to refresh access token: {:?}", e);
-                return Ok(json!({
-                    "success": false,
-                    "error": format!("获取access_token失败: {}", e)
-                }));
-            }
-        };
-        (token_response.access_token, token_response.expires_in)
-    };
-    
-    // Step 2: 获取auth_token
-    info!("Getting auth token...");
-    let auth_token = match get_auth_token(&access_token).await {
-        Ok(token) => token,
+    // Step 1: 始终刷新token以获取 Firebase ID Token（id_token）
+    // 新版 Windsurf 的 registerUser 要求 firebaseIdToken，不再接受 GetOneTimeAuthToken
+    info!("Refreshing token to get Firebase ID Token...");
+    let token_response = match refresh_access_token(&refresh_token).await {
+        Ok(resp) => resp,
         Err(e) => {
-            error!("Failed to get auth token: {:?}", e);
+            error!("Failed to refresh token: {:?}", e);
             return Ok(json!({
                 "success": false,
-                "error": format!("获取auth_token失败: {}", e)
+                "error": format!("刷新token失败: {}", e)
             }));
         }
     };
     
-    // Step 3: 尝试重置机器ID（可能需要管理员权限）
+    let firebase_id_token = token_response.id_token;
+    let access_token = token_response.access_token;
+    let expires_in = token_response.expires_in;
+    
+    if firebase_id_token.is_empty() {
+        return Ok(json!({
+            "success": false,
+            "error": "获取Firebase ID Token为空，refresh_token可能已失效"
+        }));
+    }
+    
+    // Step 2: 尝试重置机器ID（可能需要管理员权限）
     info!("Attempting to reset machine ID...");
     let reset_result = reset_machine_id_internal().await;
     let machine_id_reset = match reset_result {
@@ -332,9 +184,9 @@ pub async fn switch_account(
         }
     };
     
-    // Step 4: 触发Windsurf回调URL以自动登录
-    info!("Triggering Windsurf callback...");
-    if let Err(e) = trigger_windsurf_callback(&auth_token).await {
+    // Step 3: 用 Firebase ID Token 触发 Windsurf 回调URL（与浏览器登录流程完全一致）
+    info!("Triggering Windsurf callback with Firebase ID Token...");
+    if let Err(e) = trigger_windsurf_callback(&firebase_id_token).await {
         error!("Failed to trigger callback: {:?}", e);
         return Ok(json!({
             "success": false,
@@ -342,7 +194,7 @@ pub async fn switch_account(
         }));
     }
     
-    // 更新账号的token信息
+    // 更新账号的token缓存信息
     let expires_at = Utc::now() + chrono::Duration::seconds(expires_in.parse::<i64>().unwrap_or(3600));
     if let Err(e) = data_store.update_account_token(
         account_id,
@@ -361,7 +213,7 @@ pub async fn switch_account(
         } else {
             "已成功触发Windsurf登录（未重置机器ID，可能需要管理员权限）"
         },
-        "auth_token": auth_token,
+        "auth_token": firebase_id_token,
         "machine_id_reset": machine_id_reset
     }))
 }

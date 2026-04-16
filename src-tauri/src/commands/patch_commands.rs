@@ -218,7 +218,39 @@ pub async fn apply_seamless_patch(
     let mut modified_content = content.clone();
     let mut modifications = vec![];
     
-    // 3. 应用修改1: 添加全局 OAuth 回调处理器
+    // 3a. 检测是否存在旧版补丁（v1: 硬编码 u.handleUri），需要先升级
+    if modified_content.contains("Failed to handle OAuth callback") && !modified_content.contains("seamless-switch-callback error") {
+        // 旧版补丁存在，将旧补丁代码替换回原始格式，再重新打新版补丁
+        // 旧补丁格式: async VAR=>{if(...){...}else{try{const t=u.handleUri(VAR);await this.handleAuthToken(t)}catch(e){console.error("[Windsurf] Failed to handle OAuth callback:",e)}}}
+        let old_patch_pattern_str = r#"this\._uriHandler\.event\(async (\w+)=>\{if\("/refresh-authentication-session"===(\w+)\.path\)\{\(0,(\w+)\.refreshAuthenticationSession\)\(\)\}else\{try\{const t=\w+\.handleUri\((\w+)\);await this\.handleAuthToken\(t\)\}catch\(e\)\{console\.error\("\[Windsurf\] Failed to handle OAuth callback:",e\)\}\}\}\)"#;
+        let old_patch_pattern = Regex::new(old_patch_pattern_str)
+            .map_err(|e| format!("旧补丁正则表达式错误: {}", e))?;
+        
+        if let Some(old_captures) = old_patch_pattern.captures(&modified_content) {
+            let var_name = &old_captures[1];
+            let module_name = &old_captures[3];
+            
+            // 还原为原始未打补丁的代码
+            let original = format!(
+                r#"this._uriHandler.event({}=>{{"/refresh-authentication-session"==={}.path&&(0,{}.refreshAuthenticationSession)()}})"#,
+                var_name, var_name, module_name
+            );
+            let old_full_match = old_captures.get(0).unwrap().as_str();
+            modified_content = modified_content.replace(old_full_match, &original);
+            modifications.push("还原旧版补丁");
+        }
+    }
+    
+    // 3b. 检查是否已安装新版补丁
+    if modified_content.contains("seamless-switch-callback error") {
+        return Ok(serde_json::json!({
+            "success": true,
+            "already_patched": true,
+            "message": "新版补丁(v2)已经应用过了"
+        }));
+    }
+    
+    // 3c. 应用新版补丁: 添加全局 OAuth 回调处理器（内联版，不依赖混淆变量名）
     let pattern1_str = r#"this\._uriHandler\.event\((\w+)=>\{"/refresh-authentication-session"===(\w+)\.path&&\(0,(\w+)\.refreshAuthenticationSession\)\(\)\}\)"#;
     let pattern1 = Regex::new(pattern1_str)
         .map_err(|e| format!("正则表达式错误: {}", e))?;
@@ -230,41 +262,29 @@ pub async fn apply_seamless_patch(
         
         // 检查两个变量名是否相同
         if var_name1 == var_name2 {
+            // 内联 handleUri 逻辑：直接从 URL fragment 提取 access_token
+            // 等效于 static handleUri(A){const e=new URLSearchParams(A.fragment).get("access_token");if(null===e)throw new Error("No token");return e}
+            // 使用 this.handleAuthToken 注册用户（与正常登录流程一致）
             let replacement = format!(
-                r#"this._uriHandler.event(async {}=>{{if("/refresh-authentication-session"==={}.path){{(0,{}.refreshAuthenticationSession)()}}else{{try{{const t=u.handleUri({});await this.handleAuthToken(t)}}catch(e){{console.error("[Windsurf] Failed to handle OAuth callback:",e)}}}}}})"#,
+                r#"this._uriHandler.event(async {}=>{{if("/refresh-authentication-session"==={}.path){{(0,{}.refreshAuthenticationSession)()}}else{{try{{const t=new URLSearchParams({}.fragment).get("access_token");if(null!==t){{await this.handleAuthToken(t)}}}}catch(e){{console.error("[Windsurf] seamless-switch-callback error:",e)}}}}}})"#,
                 var_name1, var_name1, module_name, var_name1
             );
             
             let full_match = captures.get(0).unwrap().as_str();
             modified_content = modified_content.replace(full_match, &replacement);
-            modifications.push("OAuth回调处理器");
+            modifications.push("OAuth回调处理器（v2内联版）");
         }
     }
     
-    // 4. 应用修改2: 移除180秒超时限制
-    let pattern2_str = r#",new Promise\(\((\w+),(\w+)\)=>setTimeout\(\(\)=>\{(\w+)\(new (\w+)\)\},18e4\)\)"#;
-    let pattern2 = Regex::new(pattern2_str)
-        .map_err(|e| format!("正则表达式错误2: {}", e))?;
+    // 注意：18e4 超时移除不再需要，新版 Windsurf (v1.100+) 已自行移除 180 秒超时限制
     
-    if let Some(captures) = pattern2.captures(&modified_content) {
-        let reject_var1 = &captures[2];  // 第二个参数
-        let reject_var2 = &captures[3];  // setTimeout中的变量
-        
-        // 检查是否是同一个reject变量
-        if reject_var1 == reject_var2 {
-            let full_match = captures.get(0).unwrap().as_str();
-            modified_content = modified_content.replace(full_match, "");
-            modifications.push("移除超时限制");
-        }
-    }
-    
-    // 5. 验证修改
+    // 4. 验证修改
     if modified_content == content {
-        // 如果内容没有变化，说明已经打过补丁
+        // 内容没有变化，可能是无法匹配到目标代码（Windsurf 大版本更新导致代码结构变化）
         return Ok(serde_json::json!({
-            "success": true,
-            "already_patched": true,
-            "message": "补丁已经应用过了"
+            "success": false,
+            "already_patched": false,
+            "message": "无法匹配目标代码，可能Windsurf版本不兼容，请先还原补丁再重试"
         }));
     }
     
@@ -385,14 +405,15 @@ pub async fn check_patch_status(
     let content = fs::read_to_string(&extension_file)
         .map_err(|e| format!("读取文件失败: {}", e))?;
     
-    // 检查是否包含补丁标识
-    let has_oauth_handler = content.contains("Failed to handle OAuth callback");
-    let has_timeout_removed = !content.contains("18e4");
+    // 检查是否包含补丁标识（兼容新旧版本标记）
+    let has_new_patch = content.contains("seamless-switch-callback error");
+    let has_old_patch = content.contains("Failed to handle OAuth callback");
+    let has_oauth_handler = has_new_patch || has_old_patch;
     
     Ok(serde_json::json!({
         "installed": has_oauth_handler,
         "oauth_handler": has_oauth_handler,
-        "timeout_removed": has_timeout_removed
+        "patch_version": if has_new_patch { "v2-inline" } else if has_old_patch { "v1-legacy" } else { "none" }
     }))
 }
 
