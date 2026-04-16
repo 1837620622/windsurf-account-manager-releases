@@ -46,6 +46,8 @@ async fn refresh_access_token(refresh_token: &str) -> AppResult<GoogleTokenRespo
     let response = client
         .post(&format!("{}?key={}", url, api_key))
         .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Referer", "https://windsurf.com/")
+        .header("Origin", "https://windsurf.com")
         .form(&params)
         .send()
         .await
