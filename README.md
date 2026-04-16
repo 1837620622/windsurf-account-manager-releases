@@ -6,6 +6,14 @@
 
 > **截止 2026 年 4 月 16 日，切号功能一切正常。**
 
+### v2.4.5 更新内容
+
+- **auth1 API 完整支持**：新注册账号调用 Windsurf API 时自动带上 `x-devin-*` 专用 headers（`account-id` / `org-id` / `auth1-token` / `session-token`），解决 GetUsers / GetPlanStatus / GetCurrentUser 对 auth1 账号返回不完整数据或 500 错误的问题
+- **配额实时刷新**：refresh_token 和 refresh_token_internal 按 auth_type 分支处理，auth1 账号直接重新登录获取完整凭据（含 account_id / org_id），保证每次刷新都能拿到最新真实配额
+- **Account 模型扩展**：新增 auth1 账号的 account_id / org_id / auth1_token 字段，登录时自动持久化本地
+- **tier 枚举扩展**：新增 FREE=19 枚举值映射，auth1 新账号不再显示 UNKNOWN
+- **新旧账号兼容**：Firebase 老账号与 auth1 新账号同时支持，登录/切号/刷新全链路打通
+
 ### v2.2.4 更新内容
 
 - **集成 auth1 认证**：新增 Windsurf auth1 登录方式，支持新注册账号（Firebase 不可用的账号）
