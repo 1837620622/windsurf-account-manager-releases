@@ -4,7 +4,15 @@
 
 ## 最新动态
 
-> **截止 2026 年 4 月 16 日，切号功能一切正常。**
+> **截止 2026 年 4 月 18 日，切号功能一切正常（已兼容 Windsurf 2.0.61 / 1.110.1 及更早版本）。**
+
+### v2.4.7 更新内容
+
+- **适配 Windsurf 2.0.61 新版切号**：Windsurf 升级到 2.0.61 后重写了 URI handler，从 `&&` 逻辑结构改为三元运算符 `? :`，并新增 `maybeHandleUriWithToken` 二次确认弹窗（"Are you sure you want to log in using a different account?"），导致旧补丁无法匹配目标代码
+- **双版本正则兼容**：`apply_seamless_patch` 优先匹配 2.x 新结构（三元 + `maybeHandleUriWithToken`），匹配失败则回退匹配 1.x 旧结构（`&&`），一个补丁通吃新旧 Windsurf
+- **绕过确认弹窗**：打完补丁后完全跳过 `maybeHandleUriWithToken` 的"切换账号确认框"，从 URL fragment 直接提取 `access_token` 并调用 `handleAuthToken`，真正实现无感切号
+- **变量名一致性校验**：新版正则捕获 4 处变量（箭头函数参数 + `.path` + `maybeHandleUriWithToken(...)`），全部比对一致才执行替换，避免误伤非目标代码
+- **错误提示优化**："无感切号补丁已经应用过了"提示不再带版本号后缀，更通用清晰
 
 ### v2.4.6 更新内容
 
